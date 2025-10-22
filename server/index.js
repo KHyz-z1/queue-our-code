@@ -28,11 +28,13 @@ const authRoutes = require('./routes/auth');
 const protectedRoutes = require('./routes/protected');
 const usersRoutes = require('./routes/users'); 
 const adminRoutes = require('./routes/admin');
+const queueRoutes = require('./routes/queue');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/protected', protectedRoutes);
 app.use('/api/users', usersRoutes);
-app.use('/api/admin', adminRoutes); 
+app.use('/api/admin', adminRoutes);
+app.use('/api/queue', queueRoutes); 
 
 // server start 
 const PORT = process.env.PORT || 5000;
