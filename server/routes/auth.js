@@ -86,42 +86,36 @@ router.post('/verify', require('../middleware/authMiddleware'), async (req, res)
 });
 
 
+// --- safe /api/auth/activate (token re-issue only) ---
+/**
+ * POST /api/auth/activate
+ * Body: { uid: "<userId>" }
+ * Behavior:
+ *  - If user.verified === true => issue short-lived token (1h)
+ *  - If user.verified === false => return 403 advising staff verification
+ */
 router.post('/activate', async (req, res) => {
   try {
-    const { uid, vtok } = req.body;
+    const { uid } = req.body;
     if (!uid) return res.status(400).json({ msg: 'uid required' });
 
     const user = await User.findById(uid);
     if (!user) return res.status(404).json({ msg: 'User not found' });
 
-    // If not verified -> require vtok and validate
+    // Only issue tokens if the account is already verified by staff
     if (!user.verified) {
-      if (!vtok) return res.status(400).json({ msg: 'vtok required for activation' });
-      if (user.verificationToken !== vtok) return res.status(400).json({ msg: 'Invalid verification token' });
-      if (user.verificationTokenExpires && user.verificationTokenExpires < new Date()) {
-        return res.status(400).json({ msg: 'Verification token expired' });
-      }
-
-      // Mark user verified and clear token fields
-      user.verified = true;
-      user.verificationToken = null;
-      user.verificationTokenExpires = null;
-      user.verifiedAt = new Date();
-      await user.save();
-
-      // Issue normal JWT (longer-ish lifetime if you like)
-      const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' });
-      return res.json({ token, user: { id: user._id, name: user.name, verified: user.verified } });
+      return res.status(403).json({ msg: 'Account not verified. Please have a staff member verify at the gate.' });
     }
 
-    // If already verified -> issue a short-lived token (safer)
-    const shortToken = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    return res.json({ token: shortToken, user: { id: user._id, name: user.name, verified: user.verified } });
+    // Issue a short-lived token for convenience (refresh / lost session)
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    return res.json({ token, user: { id: user._id, name: user.name, verified: true } });
   } catch (err) {
     console.error('POST /api/auth/activate error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
 
 
 module.exports = router;
