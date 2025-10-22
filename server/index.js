@@ -4,7 +4,9 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const app = express();
 
-// middleware
+
+
+// for middleware
 app.use(express.json());
 app.use(cors());
 
@@ -22,13 +24,17 @@ mongoose.connect(mongoUri, {
 // basic route
 app.get('/', (req, res) => res.send('Queue-our-code API running'));
 
-// mount auth routes (created next)
 const authRoutes = require('./routes/auth');
 const protectedRoutes = require('./routes/protected');
+const usersRoutes = require('./routes/users'); 
+const adminRoutes = require('./routes/admin');
+
 app.use('/api/auth', authRoutes);
 app.use('/api/protected', protectedRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/admin', adminRoutes); 
 
-// start server
+// server start 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
