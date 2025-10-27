@@ -7,7 +7,11 @@ const queueEntrySchema = new mongoose.Schema({
   status: { type: String, enum: ['waiting','active','completed','cancelled'], default: 'waiting' },
   position: { type: Number }, // cached position in queue (optional)
   joinedAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
+  updatedAt: { type: Date, default: Date.now },
+
+  // audit fields for staff removals
+  removedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  removedAt: { type: Date, default: null }
 });
 
 queueEntrySchema.index({ ride: 1, user: 1 }, { unique: true }); // prevents same user joining same ride twice
