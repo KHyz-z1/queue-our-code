@@ -61,4 +61,66 @@ router.post('/create-staff', auth, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/admin/staffs
+ * Admin-only. Return list of staff users (minimal fields).
+ */
+router.get('/staffs', auth, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ msg: 'Forbidden: admin only' });
+    }
+
+    // fetch staff users only, exclude sensitive fields
+    const staffs = await User.find({ role: 'staff' })
+      .select('_id name starPassCode role createdAt verified')
+      .sort({ createdAt: -1 });
+
+    // normalize id field for frontend convenience
+    const out = staffs.map((s) => ({
+      id: s._id,
+      name: s.name,
+      starPassCode: s.starPassCode || null,
+      role: s.role,
+      verified: s.verified,
+      createdAt: s.createdAt,
+    }));
+
+    return res.json({ staffs: out });
+  } catch (err) {
+    console.error('GET /api/admin/staffs error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+/**
+ * DELETE /api/admin/staffs/:id
+ * Admin-only. Delete a staff user by id.
+ */
+router.delete('/staffs/:id', auth, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ msg: 'Forbidden: admin only' });
+    }
+
+    const { id } = req.params;
+    // validate ObjectId
+    if (!id || !require('mongoose').Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ msg: 'Invalid staff id' });
+    }
+
+    // ensure the user exists and is staff
+    const staff = await User.findById(id);
+    if (!staff) return res.status(404).json({ msg: 'Staff not found' });
+    if (staff.role !== 'staff') return res.status(400).json({ msg: 'Target is not a staff user' });
+
+    await User.deleteOne({ _id: id });
+    return res.json({ msg: 'Staff deleted' });
+  } catch (err) {
+    console.error('DELETE /api/admin/staffs/:id error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+
 module.exports = router;
