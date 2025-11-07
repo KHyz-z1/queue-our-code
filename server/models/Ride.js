@@ -4,7 +4,9 @@ const mongoose = require('mongoose');
 const rideSchema = new mongoose.Schema({
   name: { type: String, required: true },
   status: { type: String, enum: ['open','closed','maintenance'], default: 'open' },
-  capacity: { type: Number, default: 1 }, // batch size (not used yet)
+  capacity: { type: Number, default: 1 }, // batch size (number of seats per cycle)
+  duration: { type: Number, default: 5 },  // duration of one ride batch in minutes
+  image: { type: String, default: null },
   location: {
     lat: { type: Number },
     lng: { type: Number }
