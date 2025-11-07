@@ -29,12 +29,19 @@ const protectedRoutes = require('./routes/protected');
 const usersRoutes = require('./routes/users'); 
 const adminRoutes = require('./routes/admin');
 const queueRoutes = require('./routes/queue');
+const printRoutes = require('./routes/print');
+const path = require('path');
+
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/protected', protectedRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/queue', queueRoutes); 
+app.use('/api/print', printRoutes);
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 // server start 
 const PORT = process.env.PORT || 5000;
