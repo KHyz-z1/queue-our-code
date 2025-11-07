@@ -234,18 +234,23 @@ router.get('/rides', auth, async (req, res) => {
       return res.status(403).json({ msg: 'Forbidden: admin only' });
     }
 
-    const rides = await Ride.find().sort({ createdAt: -1 }).select('_id name status capacity duration location createdAt');
-    // normalize id property
-    const out = rides.map(r => ({
-      id: r._id,
-      name: r.name,
-      status: r.status,
-      capacity: r.capacity,
-      duration: r.duration,
-      location: r.location || null,
-      createdAt: r.createdAt
-    }));
-    return res.json({ rides: out });
+    const rides = await Ride.find()
+  .sort({ createdAt: -1 })
+  .select('_id name status capacity duration image location createdAt');
+
+// normalize id property and include image
+const out = rides.map(r => ({
+  id: r._id,
+  name: r.name,
+  status: r.status,
+  capacity: r.capacity,
+  duration: r.duration,
+  image: r.image || null,
+  location: r.location || null,
+  createdAt: r.createdAt
+}));
+return res.json({ rides: out });
+
   } catch (err) {
     console.error('GET /api/admin/rides error:', err);
     return res.status(500).json({ msg: 'Server error' });
