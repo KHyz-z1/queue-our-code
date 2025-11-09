@@ -9,6 +9,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminRides from "./pages/AdminRides";
 import AdminLayout from "./pages/AdminLayout";
 import RequireAdmin from "./components/RequireAdmin";
+import AdminGuests from "./pages/AdminGuests";
 
 
 
@@ -42,6 +43,7 @@ function App() {
           <Route index element={<AdminDashboard />} />        {/* /admin */}
           <Route path="rides" element={<AdminRides />} />    {/* /admin/rides */}
           <Route path="staff" element={<AdminDashboard />} />{/* optional: /admin/staff */}
+          <Route path="guests" element={<AdminGuests/>} />      {/* /admin/guests */}
         </Route>
 
           

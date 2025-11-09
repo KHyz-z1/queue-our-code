@@ -5,8 +5,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 /**
  * AdminLayout
  * - Simple sidebar + content area
- * - Links: Dashboard (staff), Rides
- * - Shows a simple sign-out button
+ * - Links: Dashboard (staff), Rides, Guests
  *
  * Uses localStorage 'user' to show role and do a basic guard.
  */
@@ -76,6 +75,21 @@ export default function AdminLayout() {
           >
             Rides
           </NavLink>
+
+                    <NavLink
+            to="/admin/guests"
+            style={({ isActive }) => ({
+              color: isActive ? "#0f172a" : "#fff",
+              background: isActive ? "#fff" : "transparent",
+              padding: "8px 10px",
+              borderRadius: 6,
+              textDecoration: "none",
+              fontWeight: 600
+            })}
+          >
+            Guests
+          </NavLink>
+
         </nav>
 
         <div style={{ marginTop: 24, fontSize: 13, color: "#94a3b8" }}>
