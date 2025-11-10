@@ -37,8 +37,13 @@ export default function StaffHome() {
               <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
                 <div style={{ fontSize: 14, fontWeight: 700 }}>{r.queueCount}</div>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>in queue</div>
-                <Link to={`/staff/rides/${r.id}`} style={{ marginTop: 8, background: "#0369a1", color: '#fff', padding: '6px 10px', borderRadius: 6, textDecoration: 'none' }}>Manage</Link>
-              </div>
+                    { r.status !== 'open' ? (
+                    <button disabled style={{ padding:'6px 10px', borderRadius:6, background:'#9ca3af', color:'#fff', border:'none' }}>
+                        {r.status.toUpperCase()}
+                    </button>
+                    ) : (
+                    <Link to={`/staff/rides/${r.id}`} style={{ marginTop: 8, background: "#0369a1", color: '#fff', padding: '6px 10px', borderRadius: 6, textDecoration: 'none' }}>Manage</Link>
+                    )}              </div>
             </div>
           ))}
         </div>
