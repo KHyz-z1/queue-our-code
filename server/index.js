@@ -31,6 +31,8 @@ const adminRoutes = require('./routes/admin');
 const queueRoutes = require('./routes/queue');
 const printRoutes = require('./routes/print');
 const path = require('path');
+const staffRoutes = require('./routes/staff');
+
 
 
 
@@ -41,6 +43,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/queue', queueRoutes); 
 app.use('/api/print', printRoutes);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/staff', staffRoutes);
 
 
 // server start 
