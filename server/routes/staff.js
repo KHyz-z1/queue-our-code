@@ -5,6 +5,8 @@ const auth = require('../middleware/authMiddleware'); // expects req.user
 const Ride = require('../models/Ride');
 const QueueEntry = require('../models/QueueEntry');
 const User = require('../models/User');
+const Batch = require('../models/Batch');
+
 
 const router = express.Router();
 
@@ -192,47 +194,175 @@ router.post('/queue/remove', auth, requireStaff, async (req, res) => {
  * Body: { rideId }
  * Moves the first `capacity` waiting entries to `active`. Returns the moved entries.
  */
+// POST /api/staff/queue/start-batch
 router.post('/queue/start-batch', auth, requireStaff, async (req, res) => {
   try {
     const staffId = req.user.id;
-    const { rideId } = req.body;
+    const { rideId, force } = req.body;
     if (!rideId || !mongoose.Types.ObjectId.isValid(rideId)) return res.status(400).json({ msg: 'Invalid ride id' });
 
     const ride = await Ride.findById(rideId);
     if (!ride) return res.status(404).json({ msg: 'Ride not found' });
     if (ride.status !== 'open') return res.status(400).json({ msg: `Ride is ${ride.status}` });
 
-    const capacity = Math.max(1, Number(ride.capacity) || 1);
-
-    // Get first N waiting
-    const waiting = await QueueEntry.find({ ride: rideId, status: 'waiting' }).sort('joinedAt').limit(capacity);
-    if (!waiting || waiting.length === 0) return res.status(400).json({ msg: 'No waiting entries to start' });
-
-    const moved = [];
-    for (const e of waiting) {
-      e.status = 'active';
-      e.startedAt = new Date();
-      e.startedBy = staffId;
-      await e.save();
-      moved.push({
-        id: e._id,
-        user: e.user,
-        position: e.position
-      });
+    // Check for existing active batch
+    const existing = await Batch.findOne({ ride: rideId, status: 'active' });
+    if (existing && !force) {
+      return res.status(400).json({ msg: 'An active batch already exists for this ride. End it before starting a new one.' });
     }
 
-    // Optionally re-compute positions for remaining waiting entries
+    // If force, optionally end existing batch first
+    if (existing && force) {
+      // mark existing as cancelled (or complete) and its entries back to waiting or completed depending on policy
+      existing.status = 'cancelled';
+      existing.endedAt = new Date();
+      existing.endedBy = staffId;
+      await existing.save();
+      // set entries in that batch to 'cancelled' 
+      await QueueEntry.updateMany({ batch: existing._id }, { $set: { status: 'cancelled', removedAt: new Date(), removedBy: staffId, batch: null } });
+      // re-compute positions for waiting entries below (done later)
+    }
+
+    const capacity = Math.max(1, Number(ride.capacity) || 1);
+
+    // select first capacity waiting entries
+    const waitingDocs = await QueueEntry.find({ ride: rideId, status: 'waiting' }).sort('joinedAt').limit(capacity);
+
+    if (!waitingDocs || waitingDocs.length === 0) {
+      return res.status(400).json({ msg: 'No waiting entries to start' });
+    }
+
+    // Create new Batch
+    const now = new Date();
+    const expectedEnd = new Date(now.getTime() + (Number(ride.duration || 0) * 60 * 1000)); // minutes -> ms
+    const batch = new Batch({ ride: rideId, capacity, startedBy: staffId, expectedEndAt: expectedEnd });
+    await batch.save();
+
+    // Move waiting entries into batch
+    const moved = [];
+    for (const e of waitingDocs) {
+      e.status = 'active';
+      e.batch = batch._id;
+      e.startedAt = now;
+      await e.save();
+      moved.push({ id: e._id, user: e.user, position: e.position });
+    }
+
+    // recompute positions for remaining waiting entries
     const remaining = await QueueEntry.find({ ride: rideId, status: 'waiting' }).sort('joinedAt');
     for (let i = 0; i < remaining.length; i++) {
       remaining[i].position = i + 1;
       await remaining[i].save();
     }
 
-    return res.json({ msg: 'Batch started', movedCount: moved.length, moved });
+    // schedule auto-end (best-effort; not reliable across restarts)
+    const delay = Math.max(0, expectedEnd.getTime() - Date.now());
+    setTimeout(async () => {
+      try {
+        // find batch still active
+        const b = await Batch.findById(batch._id);
+        if (b && b.status === 'active') {
+          // mark completed:
+          b.status = 'completed';
+          b.endedAt = new Date();
+          await b.save();
+          // mark entries in batch as completed
+          await QueueEntry.updateMany({ batch: b._id }, { $set: { status: 'completed', endedAt: new Date() } });
+        }
+      } catch (e) {
+        console.error('auto-end-batch error', e);
+      }
+    }, delay);
+
+    return res.json({ msg: 'Batch started', batchId: batch._id, movedCount: moved.length, moved });
   } catch (err) {
     console.error('POST /api/staff/queue/start-batch error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
+
+
+// POST /api/staff/queue/end-batch
+router.post('/queue/end-batch', auth, requireStaff, async (req, res) => {
+  try {
+    const staffId = req.user.id;
+    const { batchId } = req.body;
+    if (!batchId || !mongoose.Types.ObjectId.isValid(batchId)) return res.status(400).json({ msg: 'Invalid batch id' });
+
+    const batch = await Batch.findById(batchId);
+    if (!batch) return res.status(404).json({ msg: 'Batch not found' });
+    if (batch.status !== 'active') return res.status(400).json({ msg: 'Batch is not active' });
+
+    batch.status = 'completed';
+    batch.endedAt = new Date();
+    batch.endedBy = staffId;
+    await batch.save();
+
+    // mark entries in batch as completed
+    await QueueEntry.updateMany({ batch: batch._id }, { $set: { status: 'completed', endedAt: new Date(), batch: null } });
+
+    // recompute waiting positions
+    const remaining = await QueueEntry.find({ ride: batch.ride, status: 'waiting' }).sort('joinedAt');
+    for (let i = 0; i < remaining.length; i++) {
+      remaining[i].position = i + 1;
+      await remaining[i].save();
+    }
+
+    return res.json({ msg: 'Batch ended', batchId: batch._id });
+  } catch (err) {
+    console.error('POST /api/staff/queue/end-batch error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+
+// POST /api/staff/queue/pushback
+router.post('/queue/pushback', auth, requireStaff, async (req, res) => {
+  try {
+    const { entryId } = req.body;
+    if (!entryId || !mongoose.Types.ObjectId.isValid(entryId)) return res.status(400).json({ msg: 'Invalid entry id' });
+
+    const entry = await QueueEntry.findById(entryId);
+    if (!entry) return res.status(404).json({ msg: 'Queue entry not found' });
+    if (entry.status !== 'waiting') return res.status(400).json({ msg: 'Only waiting entries can be pushed back' });
+
+    const rideId = entry.ride;
+    // get current waiting count (excluding this entry)
+    const waitingCount = await QueueEntry.countDocuments({ ride: rideId, status: 'waiting', _id: { $ne: entry._id } });
+    // set this entry's position to waitingCount + 1 (end)
+    entry.position = waitingCount + 1;
+    // update joinedAt so it's considered last (optional)
+    entry.joinedAt = new Date();
+    await entry.save();
+
+    // recompute positions for other waiting entries (ordered by joinedAt)
+    const waiting = await QueueEntry.find({ ride: rideId, status: 'waiting' }).sort('joinedAt');
+    for (let i = 0; i < waiting.length; i++) {
+      waiting[i].position = i + 1;
+      await waiting[i].save();
+    }
+
+    return res.json({ msg: 'Moved to end of line', entryId: entry._id });
+  } catch (err) {
+    console.error('POST /api/staff/queue/pushback error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+
+// GET /api/staff/ride/:id/active-batch
+router.get('/ride/:id/active-batch', auth, requireStaff, async (req, res) => {
+  const { id } = req.params;
+  // find active batch for ride
+  const batch = await Batch.findOne({ ride: id, status: 'active' }).lean();
+  if (!batch) return res.json({ batch: null });
+  // get entries belonging to batch with user names
+  const entries = await QueueEntry.find({ batch: batch._id }).populate('user','name').lean();
+  return res.json({ batch, entries });
+});
+
+
+
 
 module.exports = router;
