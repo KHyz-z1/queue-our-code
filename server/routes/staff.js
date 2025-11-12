@@ -5,6 +5,8 @@ const auth = require('../middleware/authMiddleware'); // expects req.user
 const Ride = require('../models/Ride');
 const QueueEntry = require('../models/QueueEntry');
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const { generateShortToken } = require('../utils/token'); // adjust path if different
 const Batch = require('../models/Batch');
 
 
@@ -360,6 +362,54 @@ router.get('/ride/:id/active-batch', auth, requireStaff, async (req, res) => {
   // get entries belonging to batch with user names
   const entries = await QueueEntry.find({ batch: batch._id }).populate('user','name').lean();
   return res.json({ batch, entries });
+});
+
+
+
+// POST /api/staff/create-guest   (staff-only registration for guests without phones)
+router.post('/create-guest', auth, requireStaff, async (req, res) => {
+  try {
+    const staffId = req.user.id;
+    const { name } = req.body;
+    if (!name || typeof name !== 'string') {
+      return res.status(400).json({ msg: 'Name is required' });
+    }
+
+    const exists = await User.findOne({ name });
+    if (exists) {
+      return res.status(400).json({ msg: 'Guest name already exists' });
+    }
+
+    // create user: role guest, verified true (since staff registers at gate)
+    const verificationToken = generateShortToken(8);
+    const expiresAt = null; // no expiry since verified immediately
+    const userData = {
+      name,
+      role: 'guest',
+      verified: true,
+      verificationToken,           // may keep for QR payload (vtok)
+      verificationTokenExpires: null,
+      verifiedAt: new Date(),
+      verifiedBy: staffId
+    };
+
+    const user = new User(userData);
+    await user.save();
+
+    // create a small payload that will be encoded to the QR used on printed stub
+    const qrPayload = { uid: user._id.toString(), vtok: verificationToken };
+
+    // Return the created user and qrPayload so the client can print stub
+    return res.status(201).json({
+      msg: 'Guest created and activated',
+      user: { id: user._id, name: user.name, verified: user.verified },
+      qrPayload
+    });
+  } catch (err) {
+    console.error('POST /api/staff/create-guest error:', err);
+    if (err.code === 11000) return res.status(400).json({ msg: 'Duplicate key error' });
+    return res.status(500).json({ msg: 'Server error' });
+  }
 });
 
 
