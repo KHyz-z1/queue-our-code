@@ -19,6 +19,9 @@ export default function QueueManage() {
   const [msg, setMsg] = useState("");
   const token = localStorage.getItem("token");
 
+  const [lastAddedEntry, setLastAddedEntry] = useState(null); // store returned entry just after join
+
+
 
   const [activeBatch, setActiveBatch] = useState(null);
   const [activeEntries, setActiveEntries] = useState([]);
@@ -73,42 +76,24 @@ export default function QueueManage() {
 
   // add by uid or name
   async function handleAdd(e) {
-    e.preventDefault();
-    try {
-      const res = await axios.post(
-        `${API}/queue/join`,
-        { rideId, uid: uid || undefined, name: name || undefined },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      setMsg(res.data.msg || "Added");
-      setUid("");
-      setName("");
-      await loadQueue();
-
-
-const entry = res.data.entry;
-const estReturn = computeEstimate(ride.duration, entry.position); // helper to format
-printStub({
-  type: "queue",
-  guestName: entry.guest.name,
-  guestId: entry.guest.id,
-  qr: entry.guest.id, 
-  rideName: entry.ride.name,
-  position: entry.position,
-  estimatedReturn: estReturn
-});
-
-
-
-
-
-    } catch (err) {
-      console.error("add err", err);
-      setMsg(err.response?.data?.msg || "Error adding guest");
-    }
+  e.preventDefault();
+  try {
+    // call your join endpoint (staff join)
+    const res = await axios.post(`${API}/queue/join`, { rideId, uid: uid || undefined, name: name || undefined }, { headers: { Authorization: `Bearer ${token}` }});
+    setMsg(res.data.msg || 'Added');
+    setUid(''); setName('');
+    // save the returned entry so staff may print stub manually
+    const entry = res.data.entry || null;
+    setLastAddedEntry(entry);
+    // refresh lists
+    await loadQueue();
+  } catch (err) {
+    console.error('add err', err);
+    setMsg(err.response?.data?.msg || 'Error adding guest');
   }
+}
 
+  // remove entry from queue
   async function handleRemove(entryId) {
     if (!window.confirm("Remove this guest from queue?")) return;
     try {
@@ -190,6 +175,29 @@ printStub({
     }
   }
 
+
+  async function handlePrintStub(entry) {
+  try {
+    // compute estimated return using ride.duration and entry.position
+    const est = computeEstimate(ride?.duration || 0, entry.position, ride?.capacity || 1);
+    // Build stub payload. Adjust fields depending on what your API returns.
+    const stubPayload = {
+      type: 'queue',
+      guestName: entry.guest?.name || entry.guest,
+      guestId: entry.guest?.id || entry.guest,
+      rideName: entry.ride?.name || ride?.name,
+      position: entry.position,
+      estimatedReturn: est,
+      qr: entry.guest?.id || entry.guest
+    };
+    printStub(stubPayload);
+  } catch (e) {
+    console.error('print stub failed', e);
+    setMsg('Could not open print window. Allow pop-ups.');
+  }
+}
+
+
   return (
     <div style={{ maxWidth: 980 }}>
       <h2>Queue Manager</h2>
@@ -247,6 +255,16 @@ printStub({
             Add
           </button>
         </form>
+                  {lastAddedEntry && (
+  <div style={{ marginTop: 8, padding: 8, borderRadius: 6, background: '#f3f4f6' }}>
+    <div style={{ fontWeight:700 }}>Guest added: {lastAddedEntry.guest?.name || lastAddedEntry.guest}</div>
+    <div style={{ fontSize:12, color:'#6b7280' }}>Position: {lastAddedEntry.position}</div>
+    <div style={{ marginTop:6 }}>
+      <button onClick={() => handlePrintStub(lastAddedEntry)} style={{ marginRight:8, padding:'6px 10px', borderRadius:6 }}>Print Stub</button>
+      <button onClick={() => setLastAddedEntry(null)} style={{ padding:'6px 10px', borderRadius:6 }}>Dismiss</button>
+    </div>
+  </div>
+)}
 
         <button
           onClick={handleStartBatch}
@@ -320,6 +338,7 @@ printStub({
                 <button onClick={() => handlePushback(e.id)} style={{ background: "#f59e0b", color: "#fff", padding: "6px 10px", borderRadius: 6 }}>
                   Push back
                 </button>
+                <button onClick={() => handlePrintStub(e)} style={{ background:'#0ea5e9', color:'#fff', padding:'6px 10px', borderRadius:6 }}>Print</button>
               </div>
             </div>
           ))}
