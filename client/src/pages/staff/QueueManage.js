@@ -178,24 +178,45 @@ export default function QueueManage() {
 
   async function handlePrintStub(entry) {
   try {
-    // compute estimated return using ride.duration and entry.position
-    const est = computeEstimate(ride?.duration || 0, entry.position, ride?.capacity || 1);
-    // Build stub payload. Adjust fields depending on what your API returns.
+    const guest = normalizeGuestFromEntry(entry);
+    const rideName = entry?.ride?.name || ride?.name || (entry?.ride || {}).name || "Ride";
+    const position = entry?.position ?? entry?.pos ?? entry?.positionNumber ?? "—";
+
+    // compute estimate using computeEstimate helper (ensure function exists in file)
+    const est = computeEstimate(ride?.duration || 0, Number(position), ride?.capacity || 1);
+
     const stubPayload = {
-      type: 'queue',
-      guestName: entry.guest?.name || entry.guest,
-      guestId: entry.guest?.id || entry.guest,
-      rideName: entry.ride?.name || ride?.name,
-      position: entry.position,
+      type: "queue",
+      guestName: guest.name || `Guest (${guest.id})`,
+      guestId: guest.id,
+      rideName,
+      position,
       estimatedReturn: est,
-      qr: entry.guest?.id || entry.guest
+      qr: guest.id // use id for QR payload
     };
+
     printStub(stubPayload);
   } catch (e) {
-    console.error('print stub failed', e);
-    setMsg('Could not open print window. Allow pop-ups.');
+    console.error("print stub failed", e);
+    setMsg("Could not open print window. Allow pop-ups.");
   }
 }
+
+
+function normalizeGuestFromEntry(entry) {
+  const maybe = entry?.guest || entry?.user || entry?.guestId || entry?.userId || null;
+  if (!maybe) return { id: entry?.guest || entry?.guestId || entry?.id || "unknown", name: entry?.guest?.name || entry?.user?.name || null };
+
+  if (typeof maybe === "string") return { id: maybe, name: null };
+
+  return {
+    id: maybe._id || maybe.id || maybe.uid || maybe.uuid || String(maybe),
+    name: maybe.name || maybe.fullName || maybe.displayName || null
+  };
+}
+
+
+
 
 
   return (
