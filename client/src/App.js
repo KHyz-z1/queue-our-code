@@ -11,7 +11,17 @@ import AdminLayout from "./pages/AdminLayout";
 import RequireAdmin from "./components/RequireAdmin";
 import AdminGuests from "./pages/AdminGuests";
 
+import RequireStaff from "./components/RequireStaff";
+import StaffLayout from "./pages/staff/StaffLayout"; 
+import StaffHome from "./pages/staff/StaffHome";
+import StaffActivate from "./pages/staff/StaffActivate";
+import QueueManage from "./pages/staff/QueueManage";
+import RegisterGuest from "./pages/staff/RegisterGuest";
 
+import MyAccount from './pages/guest/MyAccount';
+import RidesList from './pages/guest/RidesList';
+import MyQueues from './pages/guest/MyQueues';
+import GuestHome from './pages/guest/GuestHome';
 
 
 
@@ -46,9 +56,20 @@ function App() {
           <Route path="guests" element={<AdminGuests/>} />      {/* /admin/guests */}
         </Route>
 
-          
+        <Route path="/staff/*" element={<RequireStaff><StaffLayout/></RequireStaff>}>
+          <Route index element={<StaffHome />} />                {/* /staff */}
+          <Route path="home" element={<StaffHome />} />         {/* /staff/home */}
+          <Route path="activate" element={<StaffActivate />} /> {/* /staff/activate */}
+          <Route path="rides/:rideId" element={<QueueManage />} />{/* /staff/rides/:rideId */}
+          <Route path="register-guest" element={<RegisterGuest />} /> {/* /staff/register-guest */}
+        </Route>
 
-
+        <Route>
+            <Route path="/guest/home" element={<GuestHome/>} />
+            <Route path="/guest/account" element={<MyAccount/>} />
+            <Route path="/guest/rides" element={<RidesList/>} />
+            <Route path="/guest/queues" element={<MyQueues/>} />
+          </Route>
         </Routes>
       </div>
     </BrowserRouter>
