@@ -613,6 +613,50 @@ router.delete('/guests/:id', auth, async (req, res) => {
   }
 });
 
+// POST /api/admin/rides/:id/pin
+router.post('/rides/:id/pin', auth, async (req, res) => {
+  try {
+    if (!req.user) return res.status(401).json({ msg: 'Unauthorized' });
+
+    const { id } = req.params;
+    if (!id || !require('mongoose').Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ msg: 'Invalid ride id' });
+    }
+
+    const ride = await Ride.findById(id);
+    if (!ride) return res.status(404).json({ msg: 'Ride not found' });
+
+    const callerId = String(req.user.id);
+    const bodyPinned = typeof req.body.pinned === 'boolean' ? req.body.pinned : null;
+
+    if (bodyPinned === true) {
+      await Ride.updateOne({ _id: id }, { $addToSet: { pinnedBy: callerId } });
+    } else if (bodyPinned === false) {
+      await Ride.updateOne({ _id: id }, { $pull: { pinnedBy: callerId } });
+    } else {
+      const isPinned = Array.isArray(ride.pinnedBy) && ride.pinnedBy.map(String).includes(callerId);
+      if (isPinned) {
+        await Ride.updateOne({ _id: id }, { $pull: { pinnedBy: callerId } });
+      } else {
+        await Ride.updateOne({ _id: id }, { $addToSet: { pinnedBy: callerId } });
+      }
+    }
+
+    // return updated pinnedByIds
+    const updated = await Ride.findById(id).select('pinnedBy');
+    const pinnedByIds = (updated.pinnedBy || []).map(x => String(x));
+    const pinnedNow = pinnedByIds.includes(callerId);
+
+    return res.json({ msg: pinnedNow ? 'Pinned by you' : 'Unpinned', ride: { id, pinnedByIds } });
+  } catch (err) {
+    console.error('POST /api/admin/rides/:id/pin error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+
+
+
 
 
 
