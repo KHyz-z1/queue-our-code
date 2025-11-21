@@ -8,6 +8,7 @@ const QueueEntry = require('../models/QueueEntry');
 const multer = require('multer');
 const path = require('path');
 
+
 const router = express.Router();
 
 
@@ -226,6 +227,9 @@ router.put('/staffs/:id', auth, async (req, res) => {
  */
 
 const mongoose = require('mongoose');
+const ALLOWED_STATUS = ['open', 'closed', 'maintenance'];
+const ALLOWED_CATEGORIES = ['Easy', 'Moderate', 'Extreme'];
+
 
 // GET /api/admin/rides
 router.get('/rides', auth, async (req, res) => {
@@ -234,22 +238,22 @@ router.get('/rides', auth, async (req, res) => {
       return res.status(403).json({ msg: 'Forbidden: admin only' });
     }
 
-    const rides = await Ride.find()
-  .sort({ createdAt: -1 })
-  .select('_id name status capacity duration image location createdAt');
+    const rides = await Ride.find().sort({ createdAt: -1 });
 
-// normalize id property and include image
-const out = rides.map(r => ({
-  id: r._id,
-  name: r.name,
-  status: r.status,
-  capacity: r.capacity,
-  duration: r.duration,
-  image: r.image || null,
-  location: r.location || null,
-  createdAt: r.createdAt
-}));
-return res.json({ rides: out });
+    const out = rides.map(r => ({
+      id: r._id,
+      name: r.name,
+      description: r.description || '',
+      category: r.category || 'Moderate',
+      status: r.status,
+      capacity: r.capacity,
+      duration: r.duration,
+      image: r.image || null,
+      location: r.location || null,
+      createdAt: r.createdAt
+    }));
+
+    return res.json({ rides: out });
 
   } catch (err) {
     console.error('GET /api/admin/rides error:', err);
@@ -264,21 +268,69 @@ router.post('/rides', auth, upload.single('image'), async (req, res) => {
       return res.status(403).json({ msg: 'Forbidden: admin only' });
     }
 
-    const { name, status = 'open', capacity = 1, duration = 5, location = null } = req.body;
+    const {
+      name,
+      description = '',
+      category = 'Moderate',
+      status = 'open',
+      capacity = 1,
+      duration = 5,
+      location = null
+    } = req.body;
+
     if (!name || typeof name !== 'string') {
       return res.status(400).json({ msg: 'Ride name required' });
     }
 
-    const rideData = {
-      name: name.trim(),
-      status: ['open','closed','maintenance'].includes(status) ? status : 'open',
-      capacity: Number.isInteger(Number(capacity)) && Number(capacity) > 0 ? Number(capacity) : 1,
-      duration: typeof duration === 'number' ? duration : Number(duration) || 5,
-      location: location || undefined
-    };
+    // Duplicate name check
+    const existing = await Ride.findOne({
+      name: { $regex: new RegExp(`^${name.trim()}$`, "i") }
+    });
+    if (existing) return res.status(400).json({ msg: "Ride name already exists" });
+
+    // Validate category
+    if (!ALLOWED_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        msg: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}`
+      });
+    }
+
+    // Validate status
+    if (!ALLOWED_STATUS.includes(status)) {
+      return res.status(400).json({
+        msg: `Invalid status. Allowed: ${ALLOWED_STATUS.join(", ")}`
+      });
+    }
+
+    let parsedLocation = undefined;
+if (location !== undefined && location !== null && location !== '') {
+  if (typeof location === 'string') {
+    try {
+      parsedLocation = JSON.parse(location);
+      // guard: ensure parsedLocation is an object with optional lat/lng
+      if (typeof parsedLocation !== 'object' || Array.isArray(parsedLocation)) {
+        parsedLocation = undefined;
+      }
+    } catch (e) {
+      // not JSON -> ignore / treat as undefined
+      parsedLocation = undefined;
+    }
+  } else if (typeof location === 'object') {
+    parsedLocation = location;
+  }
+}
+
+const rideData = {
+  name: name.trim(),
+  description: (description || '').trim(),
+  category,
+  status,
+  capacity: Number(capacity) > 0 ? Number(capacity) : 1,
+  duration: Number(duration) > 0 ? Number(duration) : 5,
+  location: parsedLocation
+};
 
     if (req.file) {
-      // store a public path for the frontend
       rideData.image = `/uploads/${req.file.filename}`;
     }
 
@@ -290,6 +342,8 @@ router.post('/rides', auth, upload.single('image'), async (req, res) => {
       ride: {
         id: ride._id,
         name: ride.name,
+        description: ride.description,
+        category: ride.category,
         status: ride.status,
         capacity: ride.capacity,
         duration: ride.duration,
@@ -297,11 +351,13 @@ router.post('/rides', auth, upload.single('image'), async (req, res) => {
         location: ride.location
       }
     });
+
   } catch (err) {
     console.error('POST /api/admin/rides error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
 
 
 // PUT /api/admin/rides/:id
@@ -312,23 +368,82 @@ router.put('/rides/:id', auth, upload.single('image'), async (req, res) => {
     }
 
     const { id } = req.params;
-    if (!id || !require('mongoose').Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ msg: 'Invalid ride id' });
     }
 
     const ride = await Ride.findById(id);
     if (!ride) return res.status(404).json({ msg: 'Ride not found' });
 
-    const { name, status, capacity, duration, location } = req.body;
+    const {
+      name,
+      description,
+      category,
+      status,
+      capacity,
+      duration,
+      location
+    } = req.body;
 
-    if (name && typeof name === 'string') ride.name = name.trim();
-    if (status && ['open','closed','maintenance'].includes(status)) ride.status = status;
-    if (capacity !== undefined && Number.isInteger(Number(capacity)) && Number(capacity) > 0) ride.capacity = Number(capacity);
-    if (duration !== undefined && !isNaN(Number(duration)) && Number(duration) > 0) ride.duration = Number(duration);
-    if (location !== undefined) ride.location = location;
+    // Duplicate name check
+    if (name && typeof name === 'string') {
+      const trimmedName = name.trim();
+      const existing = await Ride.findOne({
+        name: { $regex: new RegExp(`^${trimmedName}$`, "i") },
+        _id: { $ne: id }
+      });
+      if (existing) {
+        return res.status(400).json({ msg: "Ride name already exists" });
+      }
+      ride.name = trimmedName;
+    }
+
+    if (description !== undefined) {
+      ride.description = description.trim();
+    }
+
+    if (category !== undefined) {
+      if (!ALLOWED_CATEGORIES.includes(category)) {
+        return res.status(400).json({
+          msg: `Invalid category. Allowed: ${ALLOWED_CATEGORIES.join(", ")}`
+        });
+      }
+      ride.category = category;
+    }
+
+    if (status && ALLOWED_STATUS.includes(status)) {
+      ride.status = status;
+    }
+
+    if (capacity !== undefined && Number(capacity) > 0) {
+      ride.capacity = Number(capacity);
+    }
+
+    if (duration !== undefined && Number(duration) > 0) {
+      ride.duration = Number(duration);
+    }
+
+   if (location !== undefined) {
+  // parse location if client sent a JSON string (multipart/form-data)
+  let parsedLocation = undefined;
+  if (typeof location === 'string') {
+    try {
+      parsedLocation = JSON.parse(location);
+      if (typeof parsedLocation !== 'object' || Array.isArray(parsedLocation)) parsedLocation = undefined;
+    } catch (e) {
+      parsedLocation = undefined;
+    }
+  } else if (typeof location === 'object') {
+    parsedLocation = location;
+  }
+  if (parsedLocation !== undefined) {
+    ride.location = parsedLocation;
+  } else {
+  }
+}
+
 
     if (req.file) {
-      // remove previous file? (optional) - not automatic here
       ride.image = `/uploads/${req.file.filename}`;
     }
 
@@ -339,6 +454,8 @@ router.put('/rides/:id', auth, upload.single('image'), async (req, res) => {
       ride: {
         id: ride._id,
         name: ride.name,
+        description: ride.description,
+        category: ride.category,
         status: ride.status,
         capacity: ride.capacity,
         duration: ride.duration,
@@ -346,11 +463,13 @@ router.put('/rides/:id', auth, upload.single('image'), async (req, res) => {
         location: ride.location
       }
     });
+
   } catch (err) {
     console.error('PUT /api/admin/rides/:id error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
 
 
 // DELETE /api/admin/rides/:id
@@ -361,25 +480,139 @@ router.delete('/rides/:id', auth, async (req, res) => {
     }
 
     const { id } = req.params;
-    if (!id || !require('mongoose').Types.ObjectId.isValid(id)) {
+    if (!mongoose.Types.ObjectId.isValid(id)) {
       return res.status(400).json({ msg: 'Invalid ride id' });
     }
 
     const ride = await Ride.findById(id);
     if (!ride) return res.status(404).json({ msg: 'Ride not found' });
 
-    // Safety: prevent deletion if there are active/waiting entries
-    const hasActive = await QueueEntry.exists({ ride: id, status: { $in: ['waiting','active'] } });
-    if (hasActive) return res.status(400).json({ msg: 'Cannot delete ride with active or waiting queue entries' });
+    const hasActive = await QueueEntry.exists({
+      ride: id,
+      status: { $in: ['waiting', 'active'] }
+    });
 
-    // optionally remove image file from disk (not implemented here)
+    if (hasActive) {
+      return res.status(400).json({
+        msg: 'Cannot delete ride with active or waiting queue entries'
+      });
+    }
+
     await Ride.deleteOne({ _id: id });
+
     return res.json({ msg: 'Ride deleted' });
+
   } catch (err) {
     console.error('DELETE /api/admin/rides/:id error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
+
+
+/**
+ * GET /api/admin/guests
+ * Admin-only: list guest users (minimal fields) and their active/waiting queues
+ */
+router.get('/guests', auth, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ msg: 'Forbidden: admin only' });
+    }
+
+    // Guests only; bring verifiedBy user name via populate
+    const guests = await User.find({ role: { $in: ['guest', null, undefined] } })
+      .select('_id name verified verifiedAt verifiedBy createdAt')
+      .populate('verifiedBy', 'name role') // <-- get staff/admin name
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Collect their ids
+    const guestIds = guests.map(g => g._id);
+
+    // Fetch active/waiting queue entries for these guests
+    const entries = await QueueEntry.find({
+      user: { $in: guestIds },
+      status: { $in: ['waiting', 'active'] }
+    })
+      .select('user ride position status joinedAt') // <-- include user so we can group
+      .populate('ride', 'name') // get ride name
+      .lean();
+
+    // Group by user id
+    const byUser = {};
+    for (const e of entries) {
+      const uid = String(e.user);
+      if (!byUser[uid]) byUser[uid] = [];
+      byUser[uid].push({
+        id: e._id,
+        rideId: e.ride?._id || null,
+        rideName: e.ride?.name || null,
+        position: e.position,
+        status: e.status,
+        joinedAt: e.joinedAt
+      });
+    }
+
+    const out = guests.map(g => ({
+      id: g._id,                      // <-- explicit id
+      name: g.name,
+      verified: !!g.verified,
+      verifiedAt: g.verifiedAt || null,
+      verifiedBy: g.verifiedBy?._id || null,
+      verifiedByName: g.verifiedBy?.name || null, // <-- staff name
+      createdAt: g.createdAt,
+      activeQueues: byUser[String(g._id)] || []
+    }));
+
+    return res.json({ guests: out });
+  } catch (err) {
+    console.error('GET /api/admin/guests error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
+
+/**
+ * DELETE /api/admin/guests/:id
+ * Admin-only: delete a guest record. Prevent deletion if they have active/waiting queues.
+ */
+router.delete('/guests/:id', auth, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ msg: 'Forbidden: admin only' });
+    }
+
+    const { id } = req.params;
+    if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ msg: 'Invalid user id' });
+    }
+
+    const user = await User.findById(id);
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+    if (user.role && user.role !== 'guest') {
+      return res.status(400).json({ msg: 'Can only delete guest users via this endpoint' });
+    }
+
+    // check for active/waiting queues
+    const hasActive = await QueueEntry.exists({ user: id, status: { $in: ['waiting','active'] } });
+    if (hasActive) {
+      return res.status(400).json({ msg: 'Cannot delete guest with active/waiting queues. Cancel queues first.' });
+    }
+
+    // safe to delete
+    await User.deleteOne({ _id: id });
+
+    // optional: remove historical queue entries if desired:
+    // await QueueEntry.deleteMany({ user: id });
+
+    return res.json({ msg: 'Guest deleted' });
+  } catch (err) {
+    console.error('DELETE /api/admin/guests/:id error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 
 
 
