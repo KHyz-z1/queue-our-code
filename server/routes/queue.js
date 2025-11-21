@@ -8,6 +8,32 @@ const QueueEntry = require('../models/QueueEntry');
 
 const router = express.Router();
 
+// helper: recompute positions and ETA for waiting entries of a ride
+async function recomputePositionsAndEta(rideId) {
+  // load ride to access capacity & duration
+  const ride = await Ride.findById(rideId);
+  const capacity = ride?.capacity || 1;
+  const duration = ride?.duration || 5; // minutes
+
+  const waiting = await QueueEntry.find({ ride: rideId, status: 'waiting' }).sort('joinedAt');
+
+  for (let i = 0; i < waiting.length; i++) {
+    const position = i + 1;
+    waiting[i].position = position;
+
+    // compute batches ahead: which batch number will this entry be served in?
+    const batchNumber = Math.ceil(position / capacity); // 1-based
+    // estimated minutes until batch starts (batches before this one)
+    const minutesUntilStart = (batchNumber - 1) * duration;
+
+    waiting[i].etaMinutes = minutesUntilStart;
+    waiting[i].estimatedReturnAt = new Date(Date.now() + minutesUntilStart * 60000);
+
+    await waiting[i].save();
+  }
+}
+
+
 /**
  * POST /api/queue/join
  * Body: { rideId: "<rideId>", guestId: "<guestId>" }
@@ -67,12 +93,20 @@ router.post('/join', auth, async (req, res) => {
         .status(400)
         .json({ msg: 'Guest is already in queue for this ride' });
 
-    // Compute new position
+    // Compute new position (count waiting entries for ride)
     const waitingCount = await QueueEntry.countDocuments({
       ride: rideId,
       status: 'waiting',
     });
     const position = waitingCount + 1;
+
+    // compute ETA using ride.duration & capacity
+    const capacity = ride.capacity || 1;
+    const duration = ride.duration || 5; // minutes
+    const batchNumber = Math.ceil(position / capacity);
+    const minutesUntilStart = (batchNumber - 1) * duration;
+    const etaMinutes = minutesUntilStart;
+    const estimatedReturnAt = new Date(Date.now() + minutesUntilStart * 60000);
 
     // Create queue entry
     const entry = new QueueEntry({
@@ -80,9 +114,12 @@ router.post('/join', auth, async (req, res) => {
       user: guestId,
       status: 'waiting',
       position,
+      etaMinutes,
+      estimatedReturnAt
     });
     await entry.save();
 
+    // respond with details (include ETA)
     return res.status(201).json({
       msg: 'Guest added to queue',
       entry: {
@@ -90,6 +127,8 @@ router.post('/join', auth, async (req, res) => {
         guest: { id: guest._id, name: guest.name },
         ride: { id: ride._id, name: ride.name },
         position,
+        etaMinutes,
+        estimatedReturnAt,
         addedBy: staffId,
       },
     });
@@ -103,6 +142,7 @@ router.post('/join', auth, async (req, res) => {
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
 
 /**
  * POST /api/queue/cancel-by-staff
@@ -134,20 +174,21 @@ router.post('/cancel-by-staff', auth, async (req, res) => {
 
     if (!entry) return res.status(404).json({ msg: 'Queue entry not found' });
 
+    // If already cancelled or completed, reject
+    if (!['waiting','active'].includes(entry.status)) {
+      return res.status(400).json({ msg: `Queue entry already ${entry.status} and cannot be cancelled` });
+    }
+
     // mark cancelled and record who removed
     entry.status = 'cancelled';
     entry.removedBy = callerId;
     entry.removedAt = new Date();
-    // optional: store a reason if you want to track why
-    if (reason) entry.reason = reason;
+    // optional: entry.reason = reason;
     await entry.save();
 
+
     // recompute positions for other waiting users
-    const waiting = await QueueEntry.find({ ride: entry.ride, status: 'waiting' }).sort('joinedAt');
-    for (let i = 0; i < waiting.length; i++) {
-      waiting[i].position = i + 1;
-      await waiting[i].save();
-    }
+    await recomputePositionsAndEta(entry.ride);
 
     return res.json({
       msg: 'Guest removed from queue by staff',
@@ -179,30 +220,25 @@ router.post('/leave', auth, async (req, res) => {
     if (entryId) {
       entry = await QueueEntry.findOne({ _id: entryId, user: userId });
     } else {
-      entry = await QueueEntry.findOne({
-        ride: rideId,
-        user: userId,
-        status: { $in: ['waiting', 'active'] },
-      });
+      entry = await QueueEntry.findOne({ ride: rideId, user: userId, status: { $in: ['waiting','active'] } });
+    }
+    if (!entry) return res.status(404).json({ msg: 'Queue entry not found or not cancellable' });
+
+// If entry is already cancelled/completed — reject instead of re-cancelling
+    if (!['waiting','active'].includes(entry.status)) {
+     return res.status(400).json({ msg: `Queue entry cannot be cancelled (status=${entry.status})` });
     }
 
-    if (!entry)
-      return res.status(404).json({ msg: 'Queue entry not found' });
+// Mark cancelled (soft delete) so history remains
+entry.status = 'cancelled';
+entry.removedBy = userId; // guest cancelled themself
+entry.removedAt = new Date();
+await entry.save();
 
-    // Mark as cancelled (soft delete) so history remains
-    entry.status = 'cancelled';
-    await entry.save();
 
     // Recompute positions for remaining waiting users
-    const waiting = await QueueEntry.find({
-      ride: entry.ride,
-      status: 'waiting',
-    }).sort('joinedAt');
+   await recomputePositionsAndEta(entry.ride);
 
-    for (let i = 0; i < waiting.length; i++) {
-      waiting[i].position = i + 1;
-      await waiting[i].save();
-    }
 
     return res.json({ msg: 'Left queue', entryId: entry._id });
   } catch (err) {
@@ -270,22 +306,64 @@ router.get('/my-queues', auth, async (req, res) => {
       user: userId,
       status: { $in: ['waiting', 'active'] },
     })
-      .populate('ride', 'name status')
+      .populate('ride')
       .sort('joinedAt');
 
     return res.json({
       queues: entries.map(e => ({
-        id: e._id,
-        ride: e.ride,
-        position: e.position,
-        status: e.status,
-      })),
+    id: e._id.toString(),
+    ride: e.ride || null,
+    position: e.position,
+    status: e.status,
+    joinedAt: e.joinedAt || e.createdAt || null, 
+    createdAt: e.createdAt || null,
+    rideName: e.ride?.name || null,
+    rideDuration: e.ride?.duration || null,
+    rideCapacity: e.ride?.capacity || null,
+    user: e.user || null
+  })),
     });
   } catch (err) {
     console.error('GET /api/queue/my-queues error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
+
+// append to server/routes/queue.js (near other routes)
+// GET /api/queue/history
+// Protected: returns user's past (completed/cancelled) queue entries (paginated optional)
+router.get('/history', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // find past entries for this user (completed/cancelled)
+    const past = await QueueEntry.find({
+      user: userId,
+      status: { $in: ['completed', 'cancelled'] }
+    })
+      .sort({ joinedAt: -1 })
+      .limit(200) // safety cap, change if needed
+      .populate('ride', 'name');
+
+    const formatted = past.map(e => ({
+      id: e._id.toString(),
+      ride: e.ride ? { id: e.ride._id.toString(), name: e.ride.name } : null,
+      position: e.position,
+      status: e.status,
+      joinedAt: e.joinedAt,
+      removedAt: e.removedAt || null,
+      completedAt: e.completedAt || null,
+      removedBy: e.removedBy || null // may be staff id
+    }));
+
+    return res.json({ history: formatted });
+  } catch (err) {
+    console.error('GET /api/queue/history error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
+
 
 module.exports = router;
 
