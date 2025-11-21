@@ -43,20 +43,45 @@ router.get('/rides', auth, requireStaff, async (req, res) => {
       return acc;
     }, {});
 
-    const out = rides.map(r => ({
-      id: r._id,
-      name: r.name,
-      status: r.status,
-      capacity: r.capacity,
-      duration: r.duration,
-      image: r.image || null,
-      location: r.location || null,
-      queueCount: countsMap[String(r._id)] || 0,
-      createdAt: r.createdAt
-    }));
 
-    out.sort((a,b) => b.queueCount - a.queueCount); // most -> least
-    return res.json({ rides: out });
+const userId = req.user && req.user.id ? String(req.user.id) : null;
+
+const out = rides.map(r => {
+  const id = r._id;
+  const image = r.image || null;
+  const shortDescription = (r.description && typeof r.description === 'string')
+    ? (r.description.length > 120 ? r.description.slice(0, 117) + '...' : r.description)
+    : null;
+
+  const pinnedByIds = Array.isArray(r.pinnedBy) ? r.pinnedBy.map(x => String(x)) : [];
+  const pinned = userId ? pinnedByIds.includes(userId) : false;
+
+  return {
+    id,
+    name: r.name,
+    description: r.description || null,
+    shortDescription,
+    category: r.category || 'Moderate',
+    status: r.status,
+    capacity: r.capacity,
+    duration: r.duration,
+    image,
+    location: r.location || null,
+    pinned,               // boolean relative to requester
+    pinnedByIds,          // array of user ids who pinned this ride
+    queueCount: countsMap[String(r._id)] || 0,
+    createdAt: r.createdAt
+  };
+});
+
+out.sort((a,b) => {
+  if (a.pinned && !b.pinned) return -1;
+  if (!a.pinned && b.pinned) return 1;
+  return b.queueCount - a.queueCount;
+});
+
+return res.json({ rides: out });
+
   } catch (err) {
     console.error('GET /api/staff/rides error:', err);
     return res.status(500).json({ msg: 'Server error' });
@@ -382,7 +407,7 @@ router.post('/create-guest', auth, requireStaff, async (req, res) => {
 
     // create user: role guest, verified true (since staff registers at gate)
     const verificationToken = generateShortToken(8);
-    const expiresAt = null; // no expiry since verified immediately
+    const expiresAt = null; 
     const userData = {
       name,
       role: 'guest',
@@ -390,7 +415,8 @@ router.post('/create-guest', auth, requireStaff, async (req, res) => {
       verificationToken,           // may keep for QR payload (vtok)
       verificationTokenExpires: null,
       verifiedAt: new Date(),
-      verifiedBy: staffId
+      verifiedBy: staffId,
+      expiresAt: null
     };
 
     const user = new User(userData);
