@@ -94,21 +94,22 @@ export default function QueueManage() {
 }
 
   // remove entry from queue
-  async function handleRemove(entryId) {
-    if (!window.confirm("Remove this guest from queue?")) return;
-    try {
-      const res = await axios.post(
-        `${API}/queue/remove`,
-        { entryId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setMsg(res.data.msg || "Removed");
-      await loadQueue();
-    } catch (err) {
-      console.error("remove err", err);
-      setMsg(err.response?.data?.msg || "Error removing");
-    }
-  }
+ async function handleRemove(entryId) {
+   if (!window.confirm('Remove this guest from queue?')) return;
+   try {
+     // NOTE: use the queue API base and the staff-cancel endpoint
+     const res = await axios.post(
+       `http://localhost:5000/api/queue/cancel-by-staff`,
+       { entryId },
+       { headers: { Authorization: `Bearer ${token}` } }
+     );
+     setMsg(res.data.msg || 'Removed');
+     await loadQueue();
+   } catch (err) {
+     console.error('remove err', err);
+     setMsg(err.response?.data?.msg || 'Error removing');
+   }
+ }
 
   async function handleStartBatch() {
     if (!window.confirm("Start next batch? This will move up to ride capacity guests to active."))
@@ -276,16 +277,47 @@ function normalizeGuestFromEntry(entry) {
             Add
           </button>
         </form>
+        
                   {lastAddedEntry && (
-  <div style={{ marginTop: 8, padding: 8, borderRadius: 6, background: '#f3f4f6' }}>
-    <div style={{ fontWeight:700 }}>Guest added: {lastAddedEntry.guest?.name || lastAddedEntry.guest}</div>
-    <div style={{ fontSize:12, color:'#6b7280' }}>Position: {lastAddedEntry.position}</div>
-    <div style={{ marginTop:6 }}>
-      <button onClick={() => handlePrintStub(lastAddedEntry)} style={{ marginRight:8, padding:'6px 10px', borderRadius:6 }}>Print Stub</button>
-      <button onClick={() => setLastAddedEntry(null)} style={{ padding:'6px 10px', borderRadius:6 }}>Dismiss</button>
-    </div>
-  </div>
-)}
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: 10,
+                    borderRadius: 8,
+                    background: "#f8fafc",
+                    border: "1px solid #e6edf3",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12
+                  }}
+                >
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#059669" }} />
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{lastAddedEntry.guest?.name || lastAddedEntry.guest || `Guest (${lastAddedEntry.guest?.id || lastAddedEntry.guest})`}</div>
+                      <div style={{ fontSize: 12, color: "#6b7280" }}>Position: {lastAddedEntry.position}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      onClick={() => handlePrintStub(lastAddedEntry)}
+                      style={{ padding: "6px 10px", borderRadius: 6, background: "#0ea5e9", color: "#fff", border: "none" }}
+                    >
+                      Print Stub
+                    </button>
+
+                    <button
+                      onClick={() => setLastAddedEntry(null)}
+                      style={{ padding: "6px 10px", borderRadius: 6, background: "#efefef", border: "1px solid #ddd" }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              )}
+
 
         <button
           onClick={handleStartBatch}

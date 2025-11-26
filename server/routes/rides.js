@@ -6,33 +6,79 @@ const mongoose = require('mongoose');
 
 const router = express.Router();
 
-/**
- * GET /api/rides
- * Public: returns rides with waitingCount (so guest homepage can sort least->most congested)
- */
+
+// GET /api/rides
+// Public: returns rides with waitingCount (so guest homepage can sort least->most congested)
+// Supports query params: q, category, sort ('waiting'|'name'|'congestion'), page, limit
 router.get('/', async (req, res) => {
   try {
-    const rides = await Ride.find().lean().sort({ name: 1 });
+    const { q = '', category, sort = 'waiting', page = 1, limit = 200 } = req.query;
 
-    const ridesWithCount = await Promise.all(rides.map(async (r) => {
-      const waitingCount = await QueueEntry.countDocuments({ ride: r._id, status: 'waiting' });
-      return {
-        id: r._id.toString(),
-        name: r.name,
-        status: r.status,
-        capacity: r.capacity,
-        duration: r.duration || null,
-        image: r.image || null,
-        waitingCount
-      };
+    // CHANGE: Initialize filter with status: 'open'
+    // Para sure na guests will NEVER see maintenance or closed rides
+    const filter = { status: 'open' };
+
+    if (q && typeof q === 'string' && q.trim()) {
+      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter.name = { $regex: new RegExp(esc(q.trim()), 'i') };
+    }
+    if (category && typeof category === 'string' && category.trim()) {
+      filter.category = category.trim();
+    }
+
+    // fetch rides that match filter
+    const rides = await Ride.find(filter).lean();
+
+    // Get waiting+active counts
+    const counts = await QueueEntry.aggregate([
+      { $match: { status: { $in: ['waiting', 'active'] } } },
+      { $group: { _id: '$ride', count: { $sum: 1 } } }
+    ]);
+
+    const countsMap = counts.reduce((m, c) => {
+      m[String(c._id)] = c.count;
+      return m;
+    }, {});
+
+    const ridesWithCount = rides.map(r => ({
+      id: r._id.toString(),
+      name: r.name,
+      status: r.status,
+      capacity: r.capacity,
+      duration: r.duration || null,
+      image: r.image || null,
+      waitingCount: countsMap[String(r._id)] || 0,
+      description: r.description || '',
+      category: r.category || ''
     }));
 
-    return res.json({ rides: ridesWithCount });
+    // sorting
+    if (sort === 'name') {
+      ridesWithCount.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sort === 'congestion') {
+      ridesWithCount.sort((a, b) => b.waitingCount - a.waitingCount);
+    } else {
+      ridesWithCount.sort((a, b) => a.waitingCount - b.waitingCount);
+    }
+
+    // pagination
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const l = Math.min(200, Math.max(5, parseInt(limit, 10) || ridesWithCount.length));
+    const start = (p - 1) * l;
+    const pageSlice = ridesWithCount.slice(start, start + l);
+
+    return res.json({
+      rides: pageSlice,
+      total: ridesWithCount.length,
+      page: p,
+      limit: l
+    });
   } catch (err) {
     console.error('GET /api/rides error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
 
 /**
  * GET /api/rides/:rideId/visual

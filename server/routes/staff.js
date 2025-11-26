@@ -29,8 +29,9 @@ function requireStaff(req, res, next) {
  */
 router.get('/rides', auth, requireStaff, async (req, res) => {
   try {
-    // fetch rides
-    const rides = await Ride.find().lean();
+    // CHANGE: Added filter { status: { $ne: 'closed' } }
+    // This allows 'open' and 'maintenance', but hides 'closed'
+    const rides = await Ride.find({ status: { $ne: 'closed' } }).lean();
 
     // fetch counts for all rides in one query (aggregation)
     const counts = await QueueEntry.aggregate([
@@ -43,44 +44,43 @@ router.get('/rides', auth, requireStaff, async (req, res) => {
       return acc;
     }, {});
 
+    const userId = req.user && req.user.id ? String(req.user.id) : null;
 
-const userId = req.user && req.user.id ? String(req.user.id) : null;
+    const out = rides.map(r => {
+      const id = r._id;
+      const image = r.image || null;
+      const shortDescription = (r.description && typeof r.description === 'string')
+        ? (r.description.length > 120 ? r.description.slice(0, 117) + '...' : r.description)
+        : null;
 
-const out = rides.map(r => {
-  const id = r._id;
-  const image = r.image || null;
-  const shortDescription = (r.description && typeof r.description === 'string')
-    ? (r.description.length > 120 ? r.description.slice(0, 117) + '...' : r.description)
-    : null;
+      const pinnedByIds = Array.isArray(r.pinnedBy) ? r.pinnedBy.map(x => String(x)) : [];
+      const pinned = userId ? pinnedByIds.includes(userId) : false;
 
-  const pinnedByIds = Array.isArray(r.pinnedBy) ? r.pinnedBy.map(x => String(x)) : [];
-  const pinned = userId ? pinnedByIds.includes(userId) : false;
+      return {
+        id,
+        name: r.name,
+        description: r.description || null,
+        shortDescription,
+        category: r.category || 'Attractions',
+        status: r.status,
+        capacity: r.capacity,
+        duration: r.duration,
+        image,
+        location: r.location || null,
+        pinned,               
+        pinnedByIds,          
+        queueCount: countsMap[String(r._id)] || 0,
+        createdAt: r.createdAt
+      };
+    });
 
-  return {
-    id,
-    name: r.name,
-    description: r.description || null,
-    shortDescription,
-    category: r.category || 'Moderate',
-    status: r.status,
-    capacity: r.capacity,
-    duration: r.duration,
-    image,
-    location: r.location || null,
-    pinned,               // boolean relative to requester
-    pinnedByIds,          // array of user ids who pinned this ride
-    queueCount: countsMap[String(r._id)] || 0,
-    createdAt: r.createdAt
-  };
-});
+    out.sort((a,b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      return b.queueCount - a.queueCount;
+    });
 
-out.sort((a,b) => {
-  if (a.pinned && !b.pinned) return -1;
-  if (!a.pinned && b.pinned) return 1;
-  return b.queueCount - a.queueCount;
-});
-
-return res.json({ rides: out });
+    return res.json({ rides: out });
 
   } catch (err) {
     console.error('GET /api/staff/rides error:', err);
@@ -391,11 +391,12 @@ router.get('/ride/:id/active-batch', auth, requireStaff, async (req, res) => {
 
 
 
-// POST /api/staff/create-guest   (staff-only registration for guests without phones)
+// POST /api/staff/create-guest
 router.post('/create-guest', auth, requireStaff, async (req, res) => {
   try {
     const staffId = req.user.id;
-    const { name } = req.body;
+    const { name, snowAccess } = req.body;
+
     if (!name || typeof name !== 'string') {
       return res.status(400).json({ msg: 'Name is required' });
     }
@@ -405,38 +406,45 @@ router.post('/create-guest', auth, requireStaff, async (req, res) => {
       return res.status(400).json({ msg: 'Guest name already exists' });
     }
 
-    // create user: role guest, verified true (since staff registers at gate)
     const verificationToken = generateShortToken(8);
-    const expiresAt = null; 
+
     const userData = {
       name,
       role: 'guest',
       verified: true,
-      verificationToken,           // may keep for QR payload (vtok)
+      verificationToken,
       verificationTokenExpires: null,
       verifiedAt: new Date(),
       verifiedBy: staffId,
-      expiresAt: null
+      expiresAt: null,
+
+      // ⬅️ NEW FIELD
+      snowAccess: !!snowAccess
     };
 
     const user = new User(userData);
     await user.save();
 
-    // create a small payload that will be encoded to the QR used on printed stub
-    const qrPayload = { uid: user._id.toString(), vtok: verificationToken };
+    const qrPayload = {
+      uid: user._id.toString(),
+      vtok: verificationToken,
+      snowAccess: !!snowAccess   // ⬅️ include in QR payload
+    };
 
-    // Return the created user and qrPayload so the client can print stub
     return res.status(201).json({
       msg: 'Guest created and activated',
-      user: { id: user._id, name: user.name, verified: user.verified },
+      user: { id: user._id, name: user.name, snowAccess: !!snowAccess },
       qrPayload
     });
+
   } catch (err) {
     console.error('POST /api/staff/create-guest error:', err);
-    if (err.code === 11000) return res.status(400).json({ msg: 'Duplicate key error' });
+    if (err.code === 11000)
+      return res.status(400).json({ msg: 'Duplicate key error' });
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
 
 
 

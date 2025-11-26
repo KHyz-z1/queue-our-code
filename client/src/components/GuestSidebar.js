@@ -3,36 +3,84 @@ import React from "react";
 import { NavLink } from "react-router-dom";
 
 export default function GuestSidebar() {
-  const activeStyle = { background: "#e6f6ff", color: "#0369a1" };
+  const userRaw = localStorage.getItem("user");
+  const user = userRaw ? JSON.parse(userRaw) : null;
+
+  function handleSignout() {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  }
 
   return (
     <aside
       style={{
         width: 220,
-        background: "#f3f4f6",
+        minWidth: 220, 
+        flexShrink: 0,
+        background: "#07203a", 
+        color: "#fff",
         minHeight: "100vh",
-        padding: 20,
+        padding: 18, 
         boxSizing: "border-box",
       }}
     >
-      <h3 style={{ marginTop: 0 }}>Guest Menu</h3>
+      <div style={{ marginBottom: 18 }}> 
+        <h3 style={{ margin: 0 }}>GUEST PANEL</h3>
+        <div style={{ fontSize: 12, color: "#cbd5e1" }}>{user?.name || "Guest"}</div>
+      </div>
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
-        <NavLink to="/guest/home" style={({isActive}) => ({ padding: 10, borderRadius: 6, textDecoration: 'none', color: '#111', background: isActive ? '#e6f6ff' : '#fff' })}>
+      <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}> 
+        <NavLink 
+          to="/guest/home" 
+          style={({isActive}) => ({ 
+            color: isActive ? "#07203a" : "#fff", 
+            background: isActive ? "#fff" : "transparent", 
+            padding: "8px 10px", 
+            borderRadius: 6, 
+            textDecoration: 'none' 
+          })}
+        >
           Home
         </NavLink>
 
-        <NavLink to="/guest/account" style={({isActive}) => ({ padding: 10, borderRadius: 6, textDecoration: 'none', color: '#111', background: isActive ? '#e6f6ff' : '#fff' })}>
+        <NavLink 
+          to="/guest/account" 
+          style={({isActive}) => ({ 
+            color: isActive ? "#07203a" : "#fff", 
+            background: isActive ? "#fff" : "transparent", 
+            padding: "8px 10px", 
+            borderRadius: 6, 
+            textDecoration: 'none' 
+          })}
+        >
           My QR
         </NavLink>
 
-        <NavLink to="/guest/queues" style={({isActive}) => ({ padding: 10, borderRadius: 6, textDecoration: 'none', color: '#111', background: isActive ? '#e6f6ff' : '#fff' })}>
+        <NavLink 
+          to="/guest/queues" 
+          style={({isActive}) => ({ 
+            color: isActive ? "#07203a" : "#fff", 
+            background: isActive ? "#fff" : "transparent", 
+            padding: "8px 10px", 
+            borderRadius: 6, 
+            textDecoration: 'none' 
+          })}
+        >
           My Queues
         </NavLink>
 
+        
         <button
-          onClick={() => { localStorage.removeItem('token'); window.location.href = '/login'; }}
-          style={{ marginTop: 8, padding: 10, borderRadius: 6, background: '#ef4444', color: '#fff', border: 'none' }}
+          onClick={handleSignout}
+          style={{ 
+            marginTop: 12, 
+            padding: "8px 10px", 
+            background: '#ef4444', 
+            color: '#fff', 
+            border: 'none',
+            borderRadius: 6,
+            width: "100%", 
+          }}
         >
           Sign out
         </button>

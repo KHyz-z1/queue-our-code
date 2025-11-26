@@ -228,7 +228,7 @@ router.put('/staffs/:id', auth, async (req, res) => {
 
 const mongoose = require('mongoose');
 const ALLOWED_STATUS = ['open', 'closed', 'maintenance'];
-const ALLOWED_CATEGORIES = ['Easy', 'Moderate', 'Extreme'];
+const ALLOWED_CATEGORIES = ['Attractions', 'Kiddie Rides', 'Family Rides', 'Teen/Adult Rides', 'Extreme Rides'];
 
 
 // GET /api/admin/rides
@@ -244,7 +244,7 @@ router.get('/rides', auth, async (req, res) => {
       id: r._id,
       name: r.name,
       description: r.description || '',
-      category: r.category || 'Moderate',
+      category: r.category || 'Attractions',
       status: r.status,
       capacity: r.capacity,
       duration: r.duration,
@@ -271,7 +271,7 @@ router.post('/rides', auth, upload.single('image'), async (req, res) => {
     const {
       name,
       description = '',
-      category = 'Moderate',
+      category = 'Attractions',
       status = 'open',
       capacity = 1,
       duration = 5,
@@ -603,7 +603,6 @@ router.delete('/guests/:id', auth, async (req, res) => {
     // safe to delete
     await User.deleteOne({ _id: id });
 
-    // optional: remove historical queue entries if desired:
     // await QueueEntry.deleteMany({ user: id });
 
     return res.json({ msg: 'Guest deleted' });
@@ -655,6 +654,73 @@ router.post('/rides/:id/pin', auth, async (req, res) => {
 });
 
 
+
+router.get('/reports/daily', auth, async (req, res) => {
+  try {
+    if (!req.user || req.user.role !== 'admin') return res.status(403).json({ msg: 'Forbidden' });
+
+    const start = new Date(); start.setHours(0,0,0,0);
+    const end = new Date(); end.setHours(23,59,59,999);
+
+    // 1) Registered guests today
+    const guestsToday = await mongoose.model('User').countDocuments({
+      createdAt: { $gte: start, $lte: end },
+      role: 'guest'
+    });
+
+    // 2) Queue stats per ride (completed/cancelled by staff/cancelled by guest)
+    const perRide = await QueueEntry.aggregate([
+      { $match: {
+         $or: [
+           { endedAt: { $gte: start, $lte: end } },            // completed today
+           { cancelledAt: { $gte: start, $lte: end } }         // cancelled today
+         ]
+      }},
+      { $project: {
+          ride: 1,
+          isCompleted: { $cond: [{ $and: [ { $ifNull: ["$endedAt", false] }, { $gte: ["$endedAt", start] }, { $lte: ["$endedAt", end] } ] }, 1, 0] },
+          cancelledByRole: 1,
+          isCancelledToday: { $cond: [{ $and: [ { $ifNull: ["$cancelledAt", false] }, { $gte: ["$cancelledAt", start] }, { $lte: ["$cancelledAt", end] } ] }, 1, 0] }
+      }},
+      { $group: {
+          _id: '$ride',
+          completed_count: { $sum: '$isCompleted' },
+          cancelled_total: { $sum: '$isCancelledToday' },
+          cancelled_by_staff: { $sum: { $cond: [{ $and: ['$isCancelledToday', { $eq: ['$cancelledByRole','staff'] }] }, 1, 0] } },
+          cancelled_by_guest: { $sum: { $cond: [{ $and: ['$isCancelledToday', { $eq: ['$cancelledByRole','guest'] }] }, 1, 0] } }
+      }},
+      { $lookup: { from: 'rides', localField: '_id', foreignField: '_id', as: 'ride' } },
+      { $unwind: { path: '$ride', preserveNullAndEmptyArrays: true } },
+      { $project: {
+          rideId: '$_id',
+          rideName: '$ride.name',
+          completed_count: 1,
+          cancelled_total: 1,
+          cancelled_by_staff: 1,
+          cancelled_by_guest: 1
+      }}
+    ]);
+
+    // Also compute totals across all rides for the day
+    const totals = perRide.reduce((acc, r) => {
+      acc.completed += r.completed_count || 0;
+      acc.cancelled_total += r.cancelled_total || 0;
+      acc.cancelled_by_staff += r.cancelled_by_staff || 0;
+      acc.cancelled_by_guest += r.cancelled_by_guest || 0;
+      return acc;
+    }, { completed: 0, cancelled_total: 0, cancelled_by_staff: 0, cancelled_by_guest: 0 });
+
+    return res.json({
+      guestsToday,
+      perRide,
+      totals
+    });
+
+  } catch (err) {
+    console.error('GET /api/admin/reports/daily error:', err);
+    return res.status(500).json({ msg: 'Server error' });
+  }
+});
 
 
 

@@ -32,7 +32,7 @@ export default function AdminRides() {
     duration: 5,
     imageFile: null, // file object if selected
     description: "",
-    category: "Moderate",
+    category: "Attractions",
     location: ""
   };
   const [formData, setFormData] = useState(emptyForm);
@@ -96,7 +96,7 @@ export default function AdminRides() {
       fd.append("capacity", formData.capacity);
       fd.append("duration", formData.duration);
       fd.append("description", formData.description || "");
-      fd.append("category", formData.category || "Moderate");
+      fd.append("category", formData.category || "");
       if (formData.location) fd.append("location", formData.location);
       if (formData.imageFile) fd.append("image", formData.imageFile);
 
@@ -133,7 +133,7 @@ export default function AdminRides() {
       duration: ride.duration || 5,
       imageFile: null, // leave null unless user selects new file
       description: ride.description || "",
-      category: ride.category || "Moderate",
+      category: ride.category || "Attractions",
       location: ride.location ? JSON.stringify(ride.location) : ""
     });
     setPreviewImage(buildImageUrl(ride.image));
@@ -218,11 +218,13 @@ export default function AdminRides() {
             <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "flex-end" }}>
               <div style={{ flex: 1 }}>
                 <label style={{ display: "block", fontWeight: 600, marginBottom: 6 }}>Category</label>
-                <select name="category" value={formData.category} onChange={handleChange} style={{ width: "100%", padding: 10, borderRadius: 6 }}>
-                  <option value="Easy">Easy</option>
-                  <option value="Moderate">Moderate</option>
-                  <option value="Extreme">Extreme</option>
-                </select>
+                  <select name="category" value={formData.category} onChange={handleChange} style={{ width: '100%', padding: 10, borderRadius: 6 }}>
+                    <option value="Attractions">Attractions</option>
+                    <option value="Kiddie Rides">Kiddie Rides</option>
+                    <option value="Family Rides">Family Rides</option>
+                    <option value="Teen/Adult Rides">Teen/Adult Rides</option>
+                    <option value="Extreme Rides">Extreme Rides</option>
+                  </select>
               </div>
 
               <div style={{ width: 180 }}>
@@ -287,7 +289,7 @@ export default function AdminRides() {
                     <div>
                       <h4 style={{ margin: "0 0 6px 0" }}>{ride.name}</h4>
                       <div style={{ fontSize: 13, color: "#6b7280" }}>
-                        <strong>Category:</strong> {ride.category || "Moderate"} &nbsp; | &nbsp;
+                        <strong>Category:</strong> {ride.category || "Attractions"} &nbsp; | &nbsp;
                         <strong>Status:</strong> {ride.status} &nbsp; | &nbsp;
                         <strong>Duration:</strong> {ride.duration} min
                       </div>

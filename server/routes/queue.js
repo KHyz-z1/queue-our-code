@@ -165,25 +165,26 @@ router.post('/cancel-by-staff', auth, async (req, res) => {
       return res.status(400).json({ msg: 'entryId or (rideId and guestId) required' });
     }
 
-    let entry;
-    if (entryId) {
-      entry = await QueueEntry.findById(entryId);
-    } else {
-      entry = await QueueEntry.findOne({ ride: rideId, user: guestId, status: { $in: ['waiting','active'] } });
-    }
-
+    
+   const entry = entryId
+     ? await QueueEntry.findById(entryId)
+     : await QueueEntry.findOne({
+         ride: rideId,
+         user: guestId, 
+         status: { $in: ['waiting','active'] }
+       });
     if (!entry) return res.status(404).json({ msg: 'Queue entry not found' });
 
-    // If already cancelled or completed, reject
-    if (!['waiting','active'].includes(entry.status)) {
-      return res.status(400).json({ msg: `Queue entry already ${entry.status} and cannot be cancelled` });
+    if (entry.status === 'cancelled') {
+      return res.status(400).json({ msg: 'Entry already cancelled' });
     }
 
-    // mark cancelled and record who removed
     entry.status = 'cancelled';
+    entry.cancelledAt = new Date();
+    entry.cancelledBy = callerId;
+    entry.cancelledByRole = callerRole;
     entry.removedBy = callerId;
     entry.removedAt = new Date();
-    // optional: entry.reason = reason;
     await entry.save();
 
 
@@ -229,12 +230,13 @@ router.post('/leave', auth, async (req, res) => {
      return res.status(400).json({ msg: `Queue entry cannot be cancelled (status=${entry.status})` });
     }
 
-// Mark cancelled (soft delete) so history remains
-entry.status = 'cancelled';
-entry.removedBy = userId; // guest cancelled themself
-entry.removedAt = new Date();
-await entry.save();
-
+    entry.status = 'cancelled';
+    entry.cancelledAt = new Date();
+    entry.cancelledByRole = 'guest';
+    entry.cancelledBy = userId;
+    entry.removedBy = userId;
+    entry.removedAt = new Date();
+    await entry.save();
 
     // Recompute positions for remaining waiting users
    await recomputePositionsAndEta(entry.ride);

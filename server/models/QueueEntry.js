@@ -17,6 +17,11 @@ const queueEntrySchema = new mongoose.Schema({
   removedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   removedAt: { type: Date, default: null },
 
+  cancelledAt: { type: Date, default: null },
+  cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  cancelledByRole: { type: String, enum: ['guest', 'staff', null], default: null },
+
+
   // Estimated timing fields (computed on join / recompute)
   etaMinutes: { type: Number, default: null }, // estimated minutes until their batch starts
   estimatedReturnAt: { type: Date, default: null } // absolute timestamp guests should return

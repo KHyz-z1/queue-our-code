@@ -1,6 +1,8 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const auth = require('../middleware/authMiddleware');
+
 
 const router = express.Router();
 
@@ -16,11 +18,11 @@ router.post('/register', async (req, res) => {
     const user = new User({ name, verified: false, verificationToken: vTok, verificationTokenExpires: expires });
     await user.save();
 
-    // QR payload to encode for user (frontend will turn this into QR string)
+    // QR payload to encode for user 
     const qrPayload = { uid: user._id.toString(), vtok: vTok };
 
     // Issue token (optional limited token — we issue same JWT but queue endpoints must check verified)
-    const jwtToken = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' });
+    const jwtToken = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
 
     res.json({
       token: jwtToken,
@@ -28,8 +30,12 @@ router.post('/register', async (req, res) => {
       qrPayload
     });
   } catch (err) {
+     if (err.code === 11000) {
+    return res.status(400).json({ msg: "Name already registered." });
+    }
     console.error(err);
     res.status(500).json({ msg: 'Server error' });
+
   }
 });
 
@@ -43,7 +49,7 @@ router.post('/login', async (req, res) => {
     const user = await User.findOne({ starPassCode });
     if (!user) return res.status(400).json({ msg: 'Invalid StarPass code' });
 
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '8h' });
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '24h' });
     res.json({ token, user: { id: user._id, starPassCode: user.starPassCode, name: user.name, role: user.role } });
   } catch (err) {
     console.error(err);
@@ -59,7 +65,7 @@ router.post('/verify', require('../middleware/authMiddleware'), async (req, res)
       return res.status(403).json({ msg: 'Forbidden: staff only' });
     }
 
-    const { uid, vtok } = req.body;
+    const { uid, vtok, snowAccess } = req.body;
     if (!uid || !vtok) return res.status(400).json({ msg: 'Missing uid or vtok' });
 
     const user = await User.findById(uid);
@@ -74,16 +80,24 @@ router.post('/verify', require('../middleware/authMiddleware'), async (req, res)
     user.verified = true;
     user.verifiedAt = new Date();
     user.verifiedBy = req.user.id;
+
+    // If staff sent snowAccess (boolean) prefer that; otherwise keep whatever was stored (or default false)
+    if (typeof snowAccess !== 'undefined') {
+      user.snowAccess = !!snowAccess;
+    }
+
     user.verificationToken = null;
     user.verificationTokenExpires = null;
+    user.expiresAt = null;
     await user.save();
 
-    res.json({ msg: 'User verified', user: { id: user._id, verified: user.verified } });
+    res.json({ msg: 'User verified', user: { id: user._id, verified: user.verified, snowAccess: user.snowAccess } });
   } catch (err) {
-    console.error(err);
+    console.error('POST /api/auth/verify error:', err);
     res.status(500).json({ msg: 'Server error' });
   }
 });
+
 
 
 // --- safe /api/auth/activate (token re-issue only) ---
@@ -91,30 +105,83 @@ router.post('/verify', require('../middleware/authMiddleware'), async (req, res)
  * POST /api/auth/activate
  * Body: { uid: "<userId>" }
  * Behavior:
- *  - If user.verified === true => issue short-lived token (1h)
+ *  - If user.verified === true => issue token
  *  - If user.verified === false => return 403 advising staff verification
  */
-router.post('/activate', async (req, res) => {
+
+router.post("/activate", async (req, res) => {
   try {
-    const { uid } = req.body;
-    if (!uid) return res.status(400).json({ msg: 'uid required' });
+    let { uid, name } = req.body;
 
-    const user = await User.findById(uid);
-    if (!user) return res.status(404).json({ msg: 'User not found' });
-
-    // Only issue tokens if the account is already verified by staff
-    if (!user.verified) {
-      return res.status(403).json({ msg: 'Account not verified. Please have a staff member verify at the gate.' });
+    if (uid && typeof uid === "object") {
+      if (uid.$oid) uid = uid.$oid;
+      else if (uid._id && uid._id.$oid) uid = uid._id.$oid;
+      else if (uid._id) uid = String(uid._id);
+      else uid = String(uid);
     }
 
-    // Issue a short-lived token for convenience (refresh / lost session)
-    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    return res.json({ token, user: { id: user._id, name: user.name, verified: true } });
+    if (!uid && !name) {
+      return res.status(400).json({ msg: "UID or name required" });
+    }
+
+    if (uid && !mongoose.Types.ObjectId.isValid(uid)) {
+      return res.status(400).json({ msg: "Invalid uid format" });
+    }
+
+    const user = uid ? await User.findById(uid) : await User.findOne({ name });
+
+    if (!user) return res.status(404).json({ msg: "User not found" });
+    if (!user.verified) return res.status(403).json({ msg: "User not verified yet" });
+
+    // issue JWT
+    const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, {
+      expiresIn: "24h",
+    });
+
+    return res.json({
+      msg: "Reactivated successfully",
+      token,
+      user: { id: user._id, name: user.name, role: user.role },
+    });
   } catch (err) {
-    console.error('POST /api/auth/activate error:', err);
+    console.error("POST /auth/activate error:", err);
+    return res.status(500).json({ msg: "Server error" });
+  }
+});
+
+
+/**
+ * GET /api/auth/me
+ * Protected: returns basic user info decoded from JWT
+ */
+router.get('/me', auth, async (req, res) => {
+  try {
+    const id = req.user.id;
+
+    // include snowAccess in the selected fields
+    const user = await User.findById(id)
+      .select('name role verified verificationToken verificationTokenExpires createdAt snowAccess');
+
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    return res.json({ user: {
+      id: user._id,
+      name: user.name,
+      role: user.role,
+      verified: user.verified,
+      verificationToken: user.verificationToken || null,
+      verificationTokenExpires: user.verificationTokenExpires || null,
+      createdAt: user.createdAt,
+      // now this will reflect the DB value (true/false)
+      snowAccess: !!user.snowAccess
+    }});
+  } catch (err) {
+    console.error('GET /api/auth/me error:', err);
     return res.status(500).json({ msg: 'Server error' });
   }
 });
+
+
 
 
 

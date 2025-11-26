@@ -5,7 +5,13 @@ import api from '../../utils/api'; // your axios wrapper that sets baseURL + Aut
 // or use: import axios from 'axios';
 
 const statusColors = { open: '#059669', closed: '#6b7280', maintenance: '#ef4444' };
-const categoryColors = { Easy: '#10b981', Moderate: '#3b82f6', Extreme: '#ef4444' };
+const categoryColors = {
+  'Attractions': '#6b7280',
+  'Kiddie Rides': '#a3e635',
+  'Family Rides': '#60a5fa',
+  'Teen/Adult Rides': '#fb923c',
+  'Extreme Rides': '#ef4444'
+};
 
 export default function StaffHome() {
   const [rides, setRides] = useState([]);
@@ -69,12 +75,14 @@ export default function StaffHome() {
         <div style={{ display: 'flex', gap: 8 }}>
           <input placeholder="Search ride" value={search} onChange={e=>setSearch(e.target.value)}
             style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }} />
-          <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
-            <option>All</option>
-            <option>Easy</option>
-            <option>Moderate</option>
-            <option>Extreme</option>
-          </select>
+            <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
+              <option>All</option>
+              <option>Attractions</option>
+              <option>Kiddie Rides</option>
+              <option>Family Rides</option>
+              <option>Teen/Adult Rides</option>
+              <option>Extreme Rides</option>
+            </select>
         </div>
       </div>
 
@@ -119,7 +127,7 @@ export default function StaffHome() {
                     padding: '6px 8px', borderRadius: 999, fontSize: 12, fontWeight:700,
                     background: categoryColors[r.category] || '#9ca3af', color: '#fff'
                   }}>
-                    {r.category || 'Moderate'}
+                    {r.category || 'Attractions'}
                   </div>
                   <div style={{ color:'#374151', fontSize:14, flex:1 }}>
                     {r.shortDescription || (r.description ? r.description.slice(0,120)+'...' : 'No description')}
