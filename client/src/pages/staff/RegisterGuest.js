@@ -1,21 +1,23 @@
-// snippet for StaffHome or modal (React)
+//  StaffHome 
 import { useState } from 'react';
 import axios from 'axios';
 import printStub from '../../utils/printStub';
+import api from '../../utils/api';
+
 
 export default function RegisterGuest() {
   const [name, setName] = useState('');
   const [msg, setMsg] = useState('');
   const token = localStorage.getItem('token');
   const [snowAccess, setSnowAccess] = useState(false);
+  
 
 
  async function handleCreateGuest(e) {
   e.preventDefault();
   if (!name) return setMsg('Name is required');
   try {
-    const res = await axios.post(
-      'http://localhost:5000/api/staff/create-guest',
+    const res = await api.post('/staff/create-guest',
       { name, snowAccess }, 
       { headers: { Authorization: `Bearer ${token}` } }
     );
