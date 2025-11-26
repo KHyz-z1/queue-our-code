@@ -10,6 +10,26 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+const allowed = [
+  'http://localhost:3000',
+  'https://your-vercel-domain.vercel.app',
+  // optionally add your Render domain if you host any client there
+];
+
+app.use(cors({
+  origin: function(origin, cb) {
+    // allow requests with no origin (like mobile apps, Postman)
+    if (!origin) return cb(null, true);
+    if (allowed.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return cb(new Error(msg), false);
+    }
+    return cb(null, true);
+  },
+  credentials: true
+}));
+
+
 // connect to MongoDB
 const mongoUri = process.env.MONGO_URI || '';
 mongoose.connect(mongoUri, {
