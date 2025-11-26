@@ -3,7 +3,9 @@ import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import GuestSidebar from "../../components/GuestSidebar";
 
-const API = "http://localhost:5000/api/rides";
+const API = `${(process.env.REACT_APP_API_URL || "http://localhost:5000/api").replace(/\/$/, "")}/rides`;
+const API_BASE = (process.env.REACT_APP_API_BASE || "http://localhost:5000").replace(/\/$/, "");
+
 
 // color map aligned with staff page
 const categoryColors = {
@@ -108,7 +110,7 @@ export default function GuestHome() {
               <article key={r.id} style={rideCardStyle}>
                 <div style={{ width: 200, height: 120, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: '#f3f4f6' }}>
                   <img
-                    src={r.image ? `http://localhost:5000${r.image}` : "/placeholder.png"}
+                    src={r.image ? `${API_BASE}${r.image}` : "/placeholder.png"}
                     alt={r.name}
                     style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
