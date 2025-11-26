@@ -1,18 +1,19 @@
 // client/src/utils/api.js
 import axios from "axios";
 
-// Backend base URL — update if your backend runs on a different port
-const API_BASE_URL = "http://localhost:5000/api";
+// Prefer REACT_APP_API_URL (set in env / Vercel) otherwise fall back to localhost for dev
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL?.replace(/\/$/, "") || "http://localhost:5000/api";
 
-// Create a preconfigured axios instance
 const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
-// Automatically attach the JWT token if available
+// Attach JWT token automatically
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token"); // token from login/activation
+  const token = localStorage.getItem("token");
   if (token) {
+    config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
