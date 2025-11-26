@@ -1,7 +1,6 @@
 // client/src/pages/AdminRides.js
 import React, { useEffect, useState } from "react";
-import api from "../utils/api"; // assumes this exists and handles base URL + auth
-// If you don't have api util, replace api.* with axios.* and include axios import.
+import api from "../utils/api"; 
 
 const cardStyle = {
   background: "#fff",
@@ -10,7 +9,7 @@ const cardStyle = {
   boxShadow: "0 1px 2px rgba(0,0,0,0.04)"
 };
 
-const SERVER = "http://localhost:5000";
+const SERVER = (process.env.REACT_APP_API_BASE || "http://localhost:5000").replace(/\/$/, "");
 
 function buildImageUrl(path) {
   if (!path) return null;
