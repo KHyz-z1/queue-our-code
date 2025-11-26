@@ -5,6 +5,9 @@ import api from '../../utils/api';
 export default function RidesList() {
   const [rides, setRides] = useState([]);
 
+  const API_BASE = (process.env.REACT_APP_API_BASE || "http://localhost:5000").replace(/\/$/, "");
+
+
   useEffect(()=> {
     async function load() {
       const res = await api.get('/rides'); // or /admin/rides if public
@@ -20,7 +23,7 @@ export default function RidesList() {
         {rides.map(r => (
           <div key={r.id} style={{ display:'flex', gap:12, padding:12, borderRadius:8, background:'#fff', alignItems:'center' }}>
             <div style={{ width:100, height:72, overflow:'hidden', borderRadius:8 }}>
-              <img src={`http://localhost:5000${r.image || ''}`} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              <img src={r.image ? `${API_BASE}${r.image}` : "/placeholder.png"} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
             </div>
             <div style={{ flex:1 }}>
               <div style={{ fontWeight:700 }}>{r.name}</div>
