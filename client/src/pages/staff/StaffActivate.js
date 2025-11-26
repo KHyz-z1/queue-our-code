@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import axios from "axios";
 import QRScanner from "../../components/QRScanner";
+import api from '../../utils/api';
 
 export default function StaffActivate() {
   const [uid, setUid] = useState("");
@@ -24,8 +25,7 @@ export default function StaffActivate() {
     setStatus("idle");
 
     try {
-      const res = await axios.post(
-        'http://localhost:5000/api/auth/verify',
+      const res = await api.post('/auth/verify',
         { uid, vtok, snowAccess },
         { headers: { Authorization: `Bearer ${token}` }}
       );
