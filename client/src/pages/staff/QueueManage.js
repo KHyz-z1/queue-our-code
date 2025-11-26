@@ -8,7 +8,7 @@ import printStub from "../../utils/printStub";
 
 
 
-const API = "http://localhost:5000/api/staff";
+const API = `${(process.env.REACT_APP_API_URL || "http://localhost:5000/api").replace(/\/$/, "")}/staff`;
 
 export default function QueueManage() {
   const { rideId } = useParams();
