@@ -1,8 +1,7 @@
-// client/src/pages/staff/StaffHome.js (or wherever your staff rides list lives)
+// client/src/pages/staff/StaffHome.js 
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../../utils/api'; // your axios wrapper that sets baseURL + Authorization
-// or use: import axios from 'axios';
+import api from '../../utils/api'; 
 
 const statusColors = { open: '#059669', closed: '#6b7280', maintenance: '#ef4444' };
 const categoryColors = {
@@ -61,7 +60,6 @@ export default function StaffHome() {
     return matchesSearch && matchesCat;
   });
 
-  // keep server-sent order (pinned already sorted server-side), but if pinned property exists, ensure pinned top:
   filtered.sort((a,b) => {
     if (a.pinned && !b.pinned) return -1;
     if (!a.pinned && b.pinned) return 1;
