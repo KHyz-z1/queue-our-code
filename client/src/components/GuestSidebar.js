@@ -1,89 +1,57 @@
 // client/src/components/GuestSidebar.js
 import React from "react";
 import { NavLink } from "react-router-dom";
+import Button from "../ui/Button";
 
 export default function GuestSidebar() {
   const userRaw = localStorage.getItem("user");
   const user = userRaw ? JSON.parse(userRaw) : null;
 
   function handleSignout() {
-    localStorage.removeItem('token');
-    window.location.href = '/login';
+    localStorage.removeItem("token");
+    window.location.href = "/login";
   }
 
   return (
-    <aside
-      style={{
-        width: 220,
-        minWidth: 220, 
-        flexShrink: 0,
-        background: "#07203a", 
-        color: "#fff",
-        minHeight: "100vh",
-        padding: 18, 
-        boxSizing: "border-box",
-      }}
-    >
-      <div style={{ marginBottom: 18 }}> 
-        <h3 style={{ margin: 0 }}>GUEST PANEL</h3>
-        <div style={{ fontSize: 12, color: "#cbd5e1" }}>{user?.name || "Guest"}</div>
+    <aside className="w-56 min-w-[14rem] bg-[#07203a] text-white min-h-screen p-5 box-border hidden md:block">
+      <div className="mb-6">
+        <h3 className="text-lg font-bold">GUEST PANEL</h3>
+        <div className="text-sm text-slate-300 truncate">{user?.name || "Guest"}</div>
       </div>
 
-      <nav style={{ display: "flex", flexDirection: "column", gap: 8 }}> 
-        <NavLink 
-          to="/guest/home" 
-          style={({isActive}) => ({ 
-            color: isActive ? "#07203a" : "#fff", 
-            background: isActive ? "#fff" : "transparent", 
-            padding: "8px 10px", 
-            borderRadius: 6, 
-            textDecoration: 'none' 
-          })}
+      <nav className="flex flex-col gap-2">
+        <NavLink
+          to="/guest/home"
+          className={({ isActive }) =>
+            `px-3 py-2 rounded-md text-sm ${isActive ? "bg-white text-[#07203a]" : "text-white hover:bg-white/10"}`
+          }
         >
           Home
         </NavLink>
 
-        <NavLink 
-          to="/guest/account" 
-          style={({isActive}) => ({ 
-            color: isActive ? "#07203a" : "#fff", 
-            background: isActive ? "#fff" : "transparent", 
-            padding: "8px 10px", 
-            borderRadius: 6, 
-            textDecoration: 'none' 
-          })}
+        <NavLink
+          to="/guest/account"
+          className={({ isActive }) =>
+            `px-3 py-2 rounded-md text-sm ${isActive ? "bg-white text-[#07203a]" : "text-white hover:bg-white/10"}`
+          }
         >
           My QR
         </NavLink>
 
-        <NavLink 
-          to="/guest/queues" 
-          style={({isActive}) => ({ 
-            color: isActive ? "#07203a" : "#fff", 
-            background: isActive ? "#fff" : "transparent", 
-            padding: "8px 10px", 
-            borderRadius: 6, 
-            textDecoration: 'none' 
-          })}
+        <NavLink
+          to="/guest/queues"
+          className={({ isActive }) =>
+            `px-3 py-2 rounded-md text-sm ${isActive ? "bg-white text-[#07203a]" : "text-white hover:bg-white/10"}`
+          }
         >
           My Queues
         </NavLink>
 
-        
-        <button
-          onClick={handleSignout}
-          style={{ 
-            marginTop: 12, 
-            padding: "8px 10px", 
-            background: '#ef4444', 
-            color: '#fff', 
-            border: 'none',
-            borderRadius: 6,
-            width: "100%", 
-          }}
-        >
-          Sign out
-        </button>
+        <div className="mt-4">
+          <Button variant="danger" onClick={handleSignout} className="w-full justify-center">
+            Sign out
+          </Button>
+        </div>
       </nav>
     </aside>
   );

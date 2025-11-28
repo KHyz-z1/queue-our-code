@@ -2,18 +2,21 @@
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import GuestSidebar from "../../components/GuestSidebar";
+import Card from "../../ui/Card";
+import Button from "../../ui/Button";
+import Badge from "../../ui/Badge";
+import MobileGuestNav from "../../components/MobileGuestNav";
+
 
 const API = `${(process.env.REACT_APP_API_URL || "http://localhost:5000/api").replace(/\/$/, "")}/rides`;
 const API_BASE = (process.env.REACT_APP_API_BASE || "http://localhost:5000").replace(/\/$/, "");
 
-
-// color map aligned with staff page
 const categoryColors = {
-  "Attractions": "#10b981",
-  "Kiddie Rides": "#3b82f6",
-  "Family Rides": "#f59e0b",
-  "Teen/Adult Rides": "#6366f1",
-  "Extreme Rides": "#ef4444"
+  "Attractions": "bg-emerald-500",
+  "Kiddie Rides": "bg-blue-500",
+  "Family Rides": "bg-yellow-500",
+  "Teen/Adult Rides": "bg-violet-600",
+  "Extreme Rides": "bg-red-500",
 };
 
 const CATEGORIES = ['All', 'Attractions', 'Kiddie Rides', 'Family Rides', 'Teen/Adult Rides', 'Extreme Rides'];
@@ -21,18 +24,17 @@ const CATEGORIES = ['All', 'Attractions', 'Kiddie Rides', 'Family Rides', 'Teen/
 export default function GuestHome() {
   const [rides, setRides] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [q, setQ] = useState('');
-  const [category, setCategory] = useState('All');
-  const [sort, setSort] = useState('waiting'); // waiting | name | congestion
+  const [q, setQ] = useState("");
+  const [category, setCategory] = useState("All");
+  const [sort, setSort] = useState("waiting");
   const deb = useRef(null);
-  const [expanded, setExpanded] = useState({}); // map rideId -> bool
+  const [expanded, setExpanded] = useState({});
 
   useEffect(() => {
     fetchRides();
     // eslint-disable-next-line
   }, []);
 
-  // debounce when q/category/sort change
   useEffect(() => {
     clearTimeout(deb.current);
     deb.current = setTimeout(() => {
@@ -49,8 +51,7 @@ export default function GuestHome() {
       if (q && q.trim()) params.q = q.trim();
       if (category && category !== 'All') params.category = category;
       const res = await axios.get(API, { params });
-      const list = res.data.rides || [];
-      setRides(list);
+      setRides(res.data.rides || []);
     } catch (err) {
       console.error("load rides err", err);
       setRides([]);
@@ -64,158 +65,94 @@ export default function GuestHome() {
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#f6f7fb" }}>
+    <div className="flex min-h-screen bg-slate-50">
+      <MobileGuestNav />
       <GuestSidebar />
 
-      <div style={{ flex: 1, padding: 24, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={centeredContentStyle}>
-          <h2 style={{ marginBottom: 16 }}>Guest Dashboard</h2>
+      <main className="flex-1 p-6">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-2xl font-bold mb-4">Guest Dashboard</h2>
 
-          {/* Top Navigation Cards */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-            <a href="/guest/account" style={cardStyle}>
-              <div style={{ fontSize: 22, marginBottom: 8 }}>📱</div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>My QR</div>
-            </a>
+          {/* Top: cards */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <Card className="flex flex-col items-center justify-center">
+              <div className="text-2xl mb-2">📱</div>
+              <div className="font-semibold">My QR</div>
+              <div className="text-sm text-slate-500 mt-1">Show to staff to verify</div>
+              <a href="/guest/account" className="mt-3">
+                <Button variant="primary">Open</Button>
+              </a>
+            </Card>
 
-            <a href="/guest/queues" style={cardStyle}>
-              <div style={{ fontSize: 22, marginBottom: 8 }}>🎟️</div>
-              <div style={{ fontSize: 15, fontWeight: 600 }}>My Queues</div>
-            </a>
+            <Card className="flex flex-col items-center justify-center">
+              <div className="text-2xl mb-2">🎟️</div>
+              <div className="font-semibold">My Queues</div>
+              <div className="text-sm text-slate-500 mt-1">View active and past queues</div>
+              <a href="/guest/queues" className="mt-3">
+                <Button variant="primary">Open</Button>
+              </a>
+            </Card>
           </div>
 
-          {/* Search and Filters */}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 20 }}>
-            <input placeholder="Search rides by name" value={q} onChange={e => setQ(e.target.value)}
-              style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }} />
-            <select value={category} onChange={e => setCategory(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }}>
+          {/* Search & filters */}
+          <div className="flex gap-3 items-center mb-6">
+            <input
+              className="flex-1 px-3 py-2 rounded-lg border border-gray-200 bg-white"
+              placeholder="Search rides by name"
+              value={q}
+              onChange={e => setQ(e.target.value)}
+            />
+            <select className="px-3 py-2 rounded-lg border border-gray-200 bg-white" value={category} onChange={e => setCategory(e.target.value)}>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
-            <select value={sort} onChange={e => setSort(e.target.value)} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff' }}>
+            <select className="px-3 py-2 rounded-lg border border-gray-200 bg-white" value={sort} onChange={e => setSort(e.target.value)}>
               <option value="waiting">Least busy</option>
               <option value="congestion">Most busy</option>
               <option value="name">Name</option>
             </select>
           </div>
 
-          {/* Ride List Header */}
-          <h3 style={{ marginBottom: 8 }}>Rides Available</h3>
-          <div style={{ marginBottom: 15, color: '#6b7280', fontSize: 13 }}>
-            {loading ? 'Loading ride data...' : `Showing ${rides.length} results`}
-          </div>
+          <div className="mb-2 text-sm text-slate-600">{loading ? "Loading..." : `Showing ${rides.length} results`}</div>
 
-          {/* Ride List */}
-          <div style={{ display: "grid", gap: 16 }}>
-            {rides.map((r) => (
-              <article key={r.id} style={rideCardStyle}>
-                <div style={{ width: 200, height: 120, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: '#f3f4f6' }}>
-                  <img
-                    src={r.image ? `${API_BASE}${r.image}` : "/placeholder.png"}
-                    alt={r.name}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                  />
+          {/* Rides list */}
+          <div className="space-y-4">
+            {rides.map(r => (
+              <article key={r.id} className="flex gap-4 items-start bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+                <div className="w-40 h-28 flex-shrink-0 bg-gray-100">
+                  <img src={r.image ? `${API_BASE}${r.image}` : "/placeholder.png"} alt={r.name} className="w-full h-full object-cover" />
                 </div>
 
-                {/* Middle: Content */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-
-                  {/* Name and Category Badge */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                    <div style={{
-                      padding: '4px 8px',
-                      borderRadius: 999,
-                      fontSize: 11,
-                      fontWeight: 600,
-                      background: categoryColors[r.category] || '#9ca3af',
-                      color: '#fff',
-                      flexShrink: 0
-                    }}>
-                      {r.category || '—'}
-                    </div>
+                <div className="flex-1 p-3 min-w-0">
+                  <div className="flex justify-between items-start">
+                    <div className="text-lg font-bold truncate">{r.name}</div>
+                    <Badge colorClass={categoryColors[r.category] || "bg-gray-400"}>{r.category || "—"}</Badge>
                   </div>
 
-                  {/* Capacity and Duration Info */}
-                  <div style={{ fontSize: 12, color: "#6b7280" }}>
-                    Capacity: {r.capacity} • Duration: {r.duration ?? '—'} min
+                  <div className="text-sm text-slate-500 mt-1">Capacity: {r.capacity} • Duration: {r.duration ?? '—'} min</div>
+
+                  <div className={`mt-3 text-sm text-slate-700 ${expanded[r.id] ? "" : "line-clamp-2"}`} style={{ maxHeight: expanded[r.id] ? 220 : 40 }}>
+                    {r.description || "No description available."}
                   </div>
 
-                  {/* Description + show more */}
-                  <div style={{ marginTop: 8, color: '#374151' }}>
-                    <div style={{
-                      maxHeight: expanded[r.id] ? 220 : 39, 
-                      overflow: 'hidden',
-                      transition: 'max-height 180ms ease',
-                      lineHeight: '1.3em',
-                      fontSize: 14
-                    }}>
-                      {r.description || 'No description available.'}
-                    </div>
-
-                    {r.description && r.description.length > 100 && ( 
-                      <button onClick={() => toggleExpand(r.id)} style={showMoreBtn}>
-                        {expanded[r.id] ? 'Show less' : 'Show more'}
-                      </button>
-                    )}
-                  </div>
+                  {r.description && r.description.length > 120 && (
+                    <button className="mt-2 text-sm text-sky-600 font-semibold" onClick={() => toggleExpand(r.id)}>
+                      {expanded[r.id] ? "Show less" : "Show more"}
+                    </button>
+                  )}
                 </div>
 
-                {/* Right: Queue Count and Button */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', paddingLeft: 10, minWidth: 100 }}>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#062353ff', lineHeight: 1 }}>{r.waitingCount}</div>
-                  <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>in queue</div>
-                  <a href={`/guest/ride/${r.id}`} style={viewBtnStyle}>View Details</a>
+                <div className="p-3 flex flex-col items-center justify-center min-w-[110px]">
+                  <div className="text-2xl font-extrabold text-sky-900">{r.waitingCount}</div>
+                  <div className="text-xs text-slate-500">in queue</div>
+                  <a href={`/guest/ride/${r.id}`} className="mt-3 w-full">
+                    <Button variant="primary" className="w-full">View</Button>
+                  </a>
                 </div>
               </article>
             ))}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
-
-/* --- Styles --- */
-const centeredContentStyle = {
-  maxWidth: 680, 
-  width: '100%'
-};
-
-const cardStyle = {
-  display: "flex", flexDirection: "column", alignItems: "center",
-  padding: 20, background: "#ffffff", borderRadius: 10, textDecoration: "none",
-  color: "#333", boxShadow: "0 1px 3px rgba(0,0,0,0.06)"
-};
-
-const rideCardStyle = {
-  display: 'flex',
-  gap: 12, 
-  alignItems: 'stretch', 
-  padding: 12, 
-  background: '#fff',
-  borderRadius: 10,
-  border: '1px solid #e6edf3',
-  boxShadow: '0 4px 10px rgba(13,20,30,0.03)' 
-};
-
-const viewBtnStyle = {
-  padding: "8px 10px",
-  background: "#0369a1",
-  color: "#fff",
-  borderRadius: 6,
-  textDecoration: 'none',
-  fontSize: 14,
-  fontWeight: 600,
-  textAlign: 'center'
-};
-
-const showMoreBtn = {
-  marginTop: 6, 
-  padding: '4px 8px', 
-  borderRadius: 4,
-  border: 'none',
-  background: '#eef2ff',
-  color: '#1e3a8a',
-  cursor: 'pointer',
-  fontSize: 12
-};
