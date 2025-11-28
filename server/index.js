@@ -5,40 +5,43 @@ const cors = require('cors');
 const app = express();
 
 
+const allowedOrigins = [
+  (process.env.FRONTEND_URL || '').replace(/\/$/, ''), 'https://queue-our-code.vercel.app',
+  'http://localhost:3000'
+].filter(Boolean);
+
+if (process.env.FRONTEND_URL_2) allowedOrigins.push(process.env.FRONTEND_URL_2.replace(/\/$/, ''));
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+
+    console.error('Blocked CORS origin:', origin);
+    return callback(new Error('The CORS policy for this site does not allow access from the specified Origin.'), false);
+  },
+  credentials: true, // set to true if you use cookies; otherwise false
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization','Accept']
+};
 
 // for middleware
+app.use(cors(corsOptions));
 app.use(express.json());
-app.use(cors());
-
-const allowed = [
-  'http://localhost:3000',
-  'https://your-vercel-domain.vercel.app',
-  // optionally add your Render domain if you host any client there
-];
-
-app.use(cors({
-  origin: function(origin, cb) {
-    // allow requests with no origin (like mobile apps, Postman)
-    if (!origin) return cb(null, true);
-    if (allowed.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return cb(new Error(msg), false);
-    }
-    return cb(null, true);
-  },
-  credentials: true
-}));
 
 
 // connect to MongoDB
 const mongoUri = process.env.MONGO_URI || '';
 mongoose.connect(mongoUri, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 }).then(() => {
-  console.log('MongoDB connected');
+  console.log('MongoDB connected');
 }).catch((err) => {
-  console.error('MongoDB connection error:', err.message);
+  console.error('MongoDB connection error:', err.message);
 });
 
 // basic route
@@ -71,5 +74,5 @@ app.use('/api/admin/reports', require('./routes/adminReports'));
 // server start 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server listening on port ${PORT}`);
 });
