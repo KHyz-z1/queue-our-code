@@ -1,58 +1,40 @@
 // client/src/components/GuestSidebar.js
 import React from "react";
-import { NavLink } from "react-router-dom";
-import Button from "../ui/Button";
+import { NavLink, useNavigate } from "react-router-dom";
 
 export default function GuestSidebar() {
   const userRaw = localStorage.getItem("user");
   const user = userRaw ? JSON.parse(userRaw) : null;
+  const navigate = useNavigate();
 
   function handleSignout() {
     localStorage.removeItem("token");
-    window.location.href = "/login";
+    localStorage.removeItem("user");
+    navigate("/login");
   }
 
   return (
-    <aside className="w-56 min-w-[14rem] bg-[#07203a] text-white min-h-screen p-5 box-border hidden md:block">
-      <div className="mb-6">
-        <h3 className="text-lg font-bold">GUEST PANEL</h3>
-        <div className="text-sm text-slate-300 truncate">{user?.name || "Guest"}</div>
+    <aside className="hidden md:flex md:flex-col w-56 bg-white border-r border-slate-100 p-4 min-h-screen">
+      <div className="mb-4 flex items-center gap-3">
+        <div className="w-10 h-10 rounded-full bg-sky-500 flex items-center justify-center text-white font-bold">
+          {user?.name ? user.name.charAt(0).toUpperCase() : "G"}
+        </div>
+        <div>
+          <div className="font-semibold text-slate-900">{user?.name || "Guest"}</div>
+          <div className="text-xs text-slate-500">{user?.role || "guest"}</div>
+        </div>
       </div>
 
-      <nav className="flex flex-col gap-2">
-        <NavLink
-          to="/guest/home"
-          className={({ isActive }) =>
-            `px-3 py-2 rounded-md text-sm ${isActive ? "bg-white text-[#07203a]" : "text-white hover:bg-white/10"}`
-          }
-        >
-          Home
-        </NavLink>
-
-        <NavLink
-          to="/guest/account"
-          className={({ isActive }) =>
-            `px-3 py-2 rounded-md text-sm ${isActive ? "bg-white text-[#07203a]" : "text-white hover:bg-white/10"}`
-          }
-        >
-          My QR
-        </NavLink>
-
-        <NavLink
-          to="/guest/queues"
-          className={({ isActive }) =>
-            `px-3 py-2 rounded-md text-sm ${isActive ? "bg-white text-[#07203a]" : "text-white hover:bg-white/10"}`
-          }
-        >
-          My Queues
-        </NavLink>
-
-        <div className="mt-4">
-          <Button variant="danger" onClick={handleSignout} className="w-full justify-center">
-            Sign out
-          </Button>
-        </div>
+      <nav className="flex-1 flex flex-col gap-1">
+        <NavLink to="/guest/home" className={({isActive}) => `px-3 py-2 rounded ${isActive ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>Home</NavLink>
+        <NavLink to="/guest/account" className={({isActive}) => `px-3 py-2 rounded ${isActive ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>My QR</NavLink>
+        <NavLink to="/guest/queues" className={({isActive}) => `px-3 py-2 rounded ${isActive ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>My Queues</NavLink>
+        <NavLink to="/faq" className={({isActive}) => `px-3 py-2 rounded ${isActive ? 'bg-slate-100' : 'hover:bg-slate-50'}`}>FAQs</NavLink>
       </nav>
+
+      <div className="mt-4">
+        <button onClick={handleSignout} className="w-full px-3 py-2 rounded bg-red-50 text-red-700 hover:bg-red-100">Sign out</button>
+      </div>
     </aside>
   );
 }
