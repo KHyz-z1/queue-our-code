@@ -44,7 +44,6 @@ export default function VerifyGuest() {
   // so the <div id="qr-reader"> appears in the DOM.
   setMode("scan");
 
-  // Now wait for the element to exist (max 2s)
   const waitForElement = (id, timeout = 2000) =>
     new Promise((resolve, reject) => {
       const start = Date.now();
@@ -72,13 +71,11 @@ export default function VerifyGuest() {
   try {
     html5Ref.current = new Html5Qrcode(elementId, { verbose: false });
 
-    // optionally pick a camera if available
     let cameraId = null;
     try {
       const devices = await Html5Qrcode.getCameras();
       cameraId = devices && devices.length ? devices[0].id : null;
     } catch (_) {
-      // ignore camera list errors
     }
 
     await html5Ref.current.start(
@@ -88,7 +85,6 @@ export default function VerifyGuest() {
         handleScanText(decodedText);
       },
       (errorMessage) => {
-        // ignore frame decode errors
       }
     );
 

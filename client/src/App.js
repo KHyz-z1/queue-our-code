@@ -26,33 +26,12 @@ import MyQueues from './pages/guest/MyQueues';
 import GuestHome from './pages/guest/GuestHome';
 import GuestRideStatus from './pages/guest/GuestRideStatus';
 
-/**
- * Small TopNav that only appears on public auth pages.
- * We use useLocation inside a component so hooks work correctly.
- */
-function TopNav() {
-  const location = useLocation();
-  const p = location.pathname || "";
 
-  // show nav only on auth pages (exact match)
-  const showAuthNav = ["/", "/login", "/activate", "/verify"].includes(p);
-
-  if (!showAuthNav) return null;
-
-  return (
-    <nav style={{ marginBottom: 12 }}>
-      <Link to="/" style={{ marginRight: 8 }}>Register</Link>
-      <Link to="/login" style={{ marginRight: 8 }}>Login (dev)</Link>
-    </nav>
-  );
-}
 
 function App() {
   return (
     <BrowserRouter>
       <div style={{ padding: 12 }}>
-        <TopNav />
-
         <Routes>
           <Route path="/" element={<Register />} />
           <Route path="/login" element={<Login />} />

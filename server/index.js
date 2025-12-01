@@ -7,7 +7,7 @@ const app = express();
 
 const allowedOrigins = [
   (process.env.FRONTEND_URL || '').replace(/\/$/, ''), 'https://queue-our-code.vercel.app',
-  'http://localhost:3000'
+  'http://localhost:3000', 'http://localhost:3001'
 ].filter(Boolean);
 
 if (process.env.FRONTEND_URL_2) allowedOrigins.push(process.env.FRONTEND_URL_2.replace(/\/$/, ''));

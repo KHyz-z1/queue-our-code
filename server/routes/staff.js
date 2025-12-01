@@ -201,8 +201,7 @@ router.post('/queue/remove', auth, requireStaff, async (req, res) => {
     entry.removedAt = new Date();
     await entry.save();
 
-    // recompute positions (reuse your helper if present)
-    // If no helper, recompute here:
+    // recompute positions 
     const waiting = await QueueEntry.find({ ride: entry.ride, status: 'waiting' }).sort('joinedAt');
     for (let i = 0; i < waiting.length; i++) {
       waiting[i].position = i + 1;
@@ -247,7 +246,7 @@ router.post('/queue/start-batch', auth, requireStaff, async (req, res) => {
       await existing.save();
       // set entries in that batch to 'cancelled' 
       await QueueEntry.updateMany({ batch: existing._id }, { $set: { status: 'cancelled', removedAt: new Date(), removedBy: staffId, batch: null } });
-      // re-compute positions for waiting entries below (done later)
+      // re-compute positions for waiting entries below 
     }
 
     const capacity = Math.max(1, Number(ride.capacity) || 1);

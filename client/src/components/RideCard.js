@@ -71,7 +71,6 @@ export default function RideCard({ ride, apiBase = "", expanded, onToggleExpand 
           )}
         </div>
 
-        {/* RIGHT: queue count + button */}
         <div className="flex flex-col items-center min-w-[84px] gap-1 ml-1">
           <div className="text-xl sm:text-2xl font-extrabold text-slate-900">{ride.waitingCount}</div>
           <div className="text-xs text-slate-500">in queue</div>

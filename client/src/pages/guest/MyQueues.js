@@ -184,52 +184,86 @@ export default function MyQueues() {
   }
 
   function QueueItem({ entry }) {
-    const ride = entry.ride || {};
-    const est = estimateReturn(entry);
-    return (
-      <Card className="p-3">
-        <div className="flex gap-3 items-start">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-semibold text-base truncate">{ride.name || entry.rideName || "Ride"}</div>
+  const ride = entry.ride || {};
+  const est = estimateReturn(entry);
+
+  // safe rideId for link (handles different shapes)
+  const rideId = ride.id || ride._id || entry.rideId || entry.ride;
+
+  return (
+    <Card className="p-3">
+      <div className="flex gap-3 items-start">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-semibold text-base truncate">
+                {ride.name || entry.rideName || "Ride"}
+              </div>
+
+              <div className="text-xs text-slate-500 mt-1">
+                Position {entry.position} • Joined:{" "}
+                {new Date(entry.joinedAt || entry.createdAt).toLocaleString()}
+              </div>
+
+              <div className="text-xs text-slate-400 mt-1">
+                UID: {getUserId(entry.user) || "—"}{" "}
+                {getUserName(entry.user) ? `• ${getUserName(entry.user)}` : ""}
+              </div>
+
+              {est && (
                 <div className="text-xs text-slate-500 mt-1">
-                  Position {entry.position} • Joined: {new Date(entry.joinedAt || entry.createdAt).toLocaleString()}
+                  Est return: ~{est.minutes} min ({est.at})
                 </div>
-                <div className="text-xs text-slate-400 mt-1">
-                  UID: {getUserId(entry.user) || "—"} {getUserName(entry.user) ? `• ${getUserName(entry.user)}` : ""}
-                </div>
-                {est && <div className="text-xs text-slate-500 mt-1">Est return: ~{est.minutes} min ({est.at})</div>}
-              </div>
-
-              <div className="flex flex-col items-end gap-2">
-                <div className="text-2xl font-extrabold text-slate-800">{entry.position}</div>
-                <div className="text-xs text-slate-400">in queue</div>
-              </div>
-            </div>
-
-            <div className="mt-3 flex gap-2">
-              {entry.status === "waiting" && (
-                <Button variant="danger" onClick={() => handleCancel(entry.id)} className="px-3 py-1 text-xs">
-                  Cancel
-                </Button>
               )}
-
-              <Button variant="secondary" onClick={() => toggleDetails(entry.id)} className="px-3 py-1 text-xs">
-                {expanded[entry.id] ? "Hide details" : "Details"}
-              </Button>
-
-              <Button variant="secondary" onClick={() => handlePrintStub(entry, ride)} className="px-3 py-1 text-xs">
-                Print Stub
-              </Button>
             </div>
 
-            {expanded[entry.id] && <DetailsPanel entry={entry} />}
+            <div className="flex flex-col items-end gap-2">
+              <div className="text-2xl font-extrabold text-slate-800">
+                {entry.position}
+              </div>
+              <div className="text-xs text-slate-400">in queue</div>
+            </div>
           </div>
+
+          <div className="mt-3 flex gap-2">
+            {entry.status === "waiting" && (
+              <Button
+                variant="danger"
+                onClick={() => handleCancel(entry.id)}
+                className="px-3 py-1 text-xs"
+              >
+                Cancel
+              </Button>
+            )}
+
+            <Button
+              variant="secondary"
+              onClick={() => toggleDetails(entry.id)}
+              className="px-3 py-1 text-xs"
+            >
+              {expanded[entry.id] ? "Hide details" : "Details"}
+            </Button>
+          </div>
+
+          {expanded[entry.id] && <DetailsPanel entry={entry} />}
         </div>
-      </Card>
-    );
-  }
+
+        {/* RIGHT COLUMN: View + actions */}
+        <div className="flex flex-col items-center gap-2 ml-2">
+          {/* View button — same behavior/style as RideCard */}
+          <a href={`/guest/ride/${rideId}`} className="w-full">
+            <Button
+              variant="primary"
+              className="w-full px-3 py-2 text-sm bg-[#0369a1] hover:bg-[#075b83] text-white"
+            >
+              View
+            </Button>
+          </a>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
   function HistoryItem({ entry }) {
     return (

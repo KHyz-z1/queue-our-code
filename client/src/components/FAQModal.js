@@ -64,17 +64,17 @@ export default function FAQModal({ open, onClose }) {
         <div className="p-5 space-y-5 max-h-[60vh] overflow-y-auto bg-white">
           <div className="space-y-1">
             <h4 className="font-semibold text-slate-900">How do I join a ride queue?</h4>
-            <p className="text-sm text-slate-600 leading-relaxed"> .</p>
+            <p className="text-sm text-slate-600 leading-relaxed"> To join a ride queue, you must present your QR code to a ride attendant and let them scan it. Click the MyQr Button at the home page or navigate through the Menu.</p>
           </div>
 
           <div className="space-y-1">
             <h4 className="font-semibold text-slate-900">What is Snow World access?</h4>
-            <p className="text-sm text-slate-600 leading-relaxed"> .</p>
+            <p className="text-sm text-slate-600 leading-relaxed"> Snow World Acess refers to the ticket type you bought at the entrance, which will give you access to Star City's Snow World Attraction.</p>
           </div>
 
           <div className="space-y-1">
             <h4 className="font-semibold text-slate-900">Can I cancel my queue?</h4>
-            <p className="text-sm text-slate-600 leading-relaxed"> .</p>
+            <p className="text-sm text-slate-600 leading-relaxed"> Yes, go to My Queues look for the active queue you wish to cancel and press cancel.</p>
           </div>
           
           <div className="pt-2">
