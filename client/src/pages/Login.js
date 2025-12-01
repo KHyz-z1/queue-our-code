@@ -80,8 +80,8 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src="/SClogo.png" alt="Star City" className="mx-auto w-40 h-40 object-contain" />
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">Star City — Queue Portal</h1>
+          <img src="/SClogo.png" alt="Star City" className="mx-auto w-60 h-60 object-contain" />
+          <h1 className="mt-0.5 text-2xl font-bold text-slate-900">Queue-Our-Code</h1>
           <p className="text-sm text-slate-500 mt-2">Guest Activation / Staff Sign-In</p>
         </div>
 
