@@ -1,25 +1,19 @@
-// client/src/pages/staff/StaffActivate.js
 import React, { useState } from "react";
-import axios from "axios";
 import QRScanner from "../../components/QRScanner";
 import api from '../../utils/api';
 
 export default function StaffActivate() {
   const [uid, setUid] = useState("");
   const [vtok, setVtok] = useState("");
-  
-  // UI States
   const [msg, setMsg] = useState("");
   const [snowMsg, setSnowMsg] = useState("");
-  const [status, setStatus] = useState("idle"); // 'idle' | 'success' | 'error'
-  
+  const [status, setStatus] = useState("idle");
   const [snowAccess, setSnowAccess] = useState(false);
+
   const token = localStorage.getItem("token");
 
   async function handleVerify(e) {
     e.preventDefault();
-    
-    // Reset states before request
     setMsg("Verifying...");
     setSnowMsg("");
     setStatus("idle");
@@ -30,36 +24,28 @@ export default function StaffActivate() {
         { headers: { Authorization: `Bearer ${token}` }}
       );
 
-      // 1. Success Handling
       setStatus("success");
       setMsg(res.data.msg || 'Guest verified successfully!');
-
       if (res.data.user) {
         const hasAccess = res.data.user.snowAccess ? "YES" : "NO";
         setSnowMsg(`Snow World Access: ${hasAccess}`);
       }
 
-      // Clear form inputs on success para mascan agad sunod
       setUid('');
       setVtok('');
       setSnowAccess(false);
-
     } catch (err) {
-      // 2. Error Handling
       console.error('verify err', err);
       setStatus("error");
       setMsg(err.response?.data?.msg || 'Verification Failed');
-      setSnowMsg(""); // Clear snow msg on error
+      setSnowMsg("");
     }
   }
 
-  // Helper to handle scan data
   const handleScan = (decoded) => {
-    // Reset previous messages when a new scan happens
     setMsg("Scanned! Ready to verify.");
     setStatus("idle");
     setSnowMsg("");
-
     try {
       const parsed = JSON.parse(decoded);
       if (parsed.uid && parsed.vtok) {
@@ -80,97 +66,88 @@ export default function StaffActivate() {
   };
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h2>Activate / Verify Guest</h2>
-
-      {/* QR Scanner Section */}
-      <div style={{ marginTop: 12, marginBottom: 20 }}>
-        <h4>Scan guest QR (recommended)</h4>
-        <QRScanner
-          onDecode={handleScan}
-          onError={(e) => {
-            setMsg("Scanner error: " + String(e));
-            setStatus("error");
-          }}
-        />
+    <div className="p-4 sm:p-6 max-w-4xl w-full mx-auto">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Activate / Verify Guest</h2>
+        <div className="text-sm text-slate-500">Scan QR or enter manually</div>
       </div>
 
-      {/* Manual Entry Form */}
-      <form onSubmit={handleVerify} style={{ display: 'grid', gap: 12 }}>
-        <div>
-          <label style={{display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600}}>Guest UID</label>
-          <input 
-            placeholder="Guest UID" 
-            value={uid} 
-            onChange={e => setUid(e.target.value)} 
-            style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #ccc' }} 
+      <section className="bg-white rounded-2xl p-4 sm:p-6 shadow-sm border border-slate-100 mb-6">
+        <h4 className="mb-3 text-sm font-medium">Scan guest QR (recommended)</h4>
+
+        <div className="mb-3">
+          <QRScanner
+            onDecode={handleScan}
+            onError={(e) => {
+              setMsg("Scanner error: " + String(e));
+              setStatus("error");
+            }}
           />
         </div>
 
-        <div>
-           <label style={{display: 'block', marginBottom: 4, fontSize: 13, fontWeight: 600}}>Verification Token</label>
-           <input 
-            placeholder="VTOK" 
-            value={vtok} 
-            onChange={e => setVtok(e.target.value)} 
-            style={{ width: '100%', padding: 10, borderRadius: 6, border: '1px solid #ccc' }} 
-          />
+        <form onSubmit={handleVerify} className="grid gap-3">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Guest UID</label>
+            <input
+              placeholder="Guest UID"
+              value={uid}
+              onChange={e => setUid(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-200"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">Verification Token</label>
+            <input
+              placeholder="VTOK"
+              value={vtok}
+              onChange={e => setVtok(e.target.value)}
+              className="w-full px-3 py-2 border rounded-md border-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-200"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 mt-1">
+            <input
+              type="checkbox"
+              checked={snowAccess}
+              onChange={e => setSnowAccess(e.target.checked)}
+              className="w-4 h-4 rounded"
+            />
+            <span className="font-medium">Grant Snow World access</span>
+          </label>
+
+          <div>
+            <button
+              type="submit"
+              className="w-full px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+            >
+              Verify Guest
+            </button>
+          </div>
+        </form>
+
+        {msg && (
+          <div
+            className={`mt-4 p-3 rounded-md border ${
+              status === 'success'
+                ? "bg-green-50 border-green-200 text-green-800"
+                : status === 'error'
+                ? "bg-red-50 border-red-200 text-red-800"
+                : "bg-slate-50 border-slate-100 text-slate-700"
+            }`}
+          >
+            <div className="font-semibold mb-1">{status === 'success' ? 'Success' : status === 'error' ? 'Error' : 'Info'}</div>
+            <div>{msg}</div>
+            {snowMsg && status === 'success' && (
+              <div className="mt-2 font-medium border-t pt-2 text-slate-700">{snowMsg}</div>
+            )}
+          </div>
+        )}
+
+        <div className="mt-4 text-sm text-slate-500">
+          Tip: You can paste guest QR payload uid/vtok in the inputs to verify quickly.
         </div>
-
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', cursor: 'pointer' }}>
-          <input 
-            type="checkbox" 
-            checked={snowAccess} 
-            onChange={e => setSnowAccess(e.target.checked)} 
-            style={{ width: 18, height: 18 }}
-          />
-          <span style={{ fontWeight: '500' }}>Grant Snow World access</span>
-        </label>
-
-        <button 
-          type="submit"
-          style={{ 
-            padding: '12px', 
-            background: '#059669', 
-            color: '#fff', 
-            borderRadius: 6, 
-            border: 'none', 
-            fontSize: 16, 
-            cursor: 'pointer',
-            fontWeight: 'bold'
-          }}
-        >
-          Verify Guest
-        </button>
-      </form>
-
-      {/* --- RESULT MESSAGE AREA --- */}
-      {msg && (
-        <div style={{ 
-          marginTop: 20, 
-          padding: 16, 
-          borderRadius: 8, 
-          textAlign: 'center',
-          backgroundColor: status === 'success' ? '#d1fae5' : (status === 'error' ? '#fee2e2' : '#f3f4f6'),
-          color: status === 'success' ? '#065f46' : (status === 'error' ? '#991b1b' : '#374151'),
-          border: `1px solid ${status === 'success' ? '#34d399' : (status === 'error' ? '#f87171' : '#d1d5db')}`
-        }}>
-          <h3 style={{ margin: '0 0 8px 0' }}>
-            {status === 'success' ? ' Success' : (status === 'error' ? ' Error' : 'ℹ Info')}
-          </h3>
-          <div style={{ fontSize: 16 }}>{msg}</div>
-          
-          {snowMsg && status === 'success' && (
-             <div style={{ marginTop: 8, fontWeight: 'bold', borderTop: '1px solid rgba(0,0,0,0.1)', paddingTop: 8 }}>
-                {snowMsg}
-             </div>
-          )}
-        </div>
-      )}
-
-      <div style={{ marginTop: 20, color:'#6b7280', fontSize:13 }}>
-        Tip: You can paste guest QR payload uid/vtok in the inputs to verify quickly.
-      </div>
+      </section>
     </div>
   );
 }
