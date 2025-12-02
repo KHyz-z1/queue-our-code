@@ -3,31 +3,26 @@ import React, { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 
 /**
- * QRScanner - polished reusable scanner component
+ * Responsive QRScanner component
+ *
+ * - Automatically calculates a square qrbox that fits the container/window.
+ * - On resize/orientation change it restarts the scanner with the new qrbox.
  *
  * Props:
- *  - onDecode(decodedString)      required: callback when successful decode
- *  - onError(errMessage)          optional: callback for non-fatal errors
- *  - autoStopOnDecode = true      optional: stop scanner after a decode
- *  - autoSubmitOnDecode = true   optional: call onDecode and immediately indicate "submit" (parent handles)
- *  - qrboxSize = 250              optional: scanning box size in px
- *  - verbose = false              optional: console logs for debugging
- *
- * Usage:
- *  <QRScanner onDecode={(s)=>{ ... }} />
- *
- * Notes:
- *  - This component renders a Start/Stop button so camera won't auto-activate.
- *  - Use a unique `id` for multiple scanners on the same page (defaults to "qr-reader").
+ *  - onDecode(decodedString)
+ *  - onError(errMessage)
+ *  - autoStopOnDecode = true
+ *  - autoSubmitOnDecode = true
+ *  - verbose = false
+ *  - elementId = "qr-reader"
  */
 export default function QRScanner({
   onDecode,
   onError,
   autoStopOnDecode = true,
   autoSubmitOnDecode = true,
-  qrboxSize = 250,
   verbose = false,
-  elementId = "qr-reader"
+  elementId = "qr-reader",
 }) {
   const [running, setRunning] = useState(false);
   const [cameras, setCameras] = useState([]);
@@ -35,20 +30,81 @@ export default function QRScanner({
   const [message, setMessage] = useState("");
   const html5Ref = useRef(null);
 
+  const containerRef = useRef(null);
+  const resizeObserver = useRef(null);
+  const [qrSize, setQrSize] = useState(280); // px (square)
+
+  // compute a good qr box size based on container width and viewport height
+  function computeSize(containerWidth = 320) {
+    // keep some margins and cap max size (so not too huge on desktop)
+    const maxByContainer = Math.floor(containerWidth * 0.92);
+    const maxByViewport = Math.floor(Math.min(window.innerHeight * 0.5, 540));
+    const chosen = Math.max(160, Math.min(maxByContainer, maxByViewport, 420));
+    return chosen;
+  }
+
   useEffect(() => {
-    // cleanup on unmount
+    // initialize size on mount
+    const c = containerRef.current;
+    if (c) {
+      const w = Math.max(200, c.clientWidth || 320);
+      setQrSize(computeSize(w));
+    }
+
+    // Setup ResizeObserver if available
+    if (typeof window !== "undefined" && "ResizeObserver" in window) {
+      resizeObserver.current = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          const w = entry.contentRect.width || entry.target.clientWidth || 320;
+          const newSize = computeSize(w);
+          if (newSize !== qrSize) {
+            setQrSize(newSize);
+            // if running - restart scanner with new size
+            if (running) {
+              restartScannerWithNewBox(newSize);
+            }
+          }
+        }
+      });
+      if (c) resizeObserver.current.observe(c);
+    } else {
+      // Fallback: listen to window resize/orientation for older browsers
+      const onResize = () => {
+        const w = containerRef.current ? containerRef.current.clientWidth : window.innerWidth;
+        const newSize = computeSize(w);
+        if (newSize !== qrSize) {
+          setQrSize(newSize);
+          if (running) {
+            restartScannerWithNewBox(newSize);
+          }
+        }
+      };
+      window.addEventListener("resize", onResize);
+      window.addEventListener("orientationchange", onResize);
+      return () => {
+        window.removeEventListener("resize", onResize);
+        window.removeEventListener("orientationchange", onResize);
+      };
+    }
+
     return () => {
-      stopScanner();
+      // cleanup observer
+      try {
+        resizeObserver.current?.disconnect();
+      } catch (e) {}
+      stopScanner(); // cleanup scanner
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // run once
 
+  // Helper: list cameras
   async function listCameras() {
     try {
       const devices = await Html5Qrcode.getCameras();
       setCameras(devices || []);
       if (devices && devices.length > 0 && !cameraId) setCameraId(devices[0].id);
       if (verbose) console.log("QRScanner cameras:", devices);
+      setMessage((prev) => (devices && devices.length ? "Cameras found" : "No cameras found"));
     } catch (err) {
       if (verbose) console.warn("QRScanner: getCameras error", err);
       setMessage("Could not list cameras.");
@@ -56,7 +112,24 @@ export default function QRScanner({
     }
   }
 
-  // Wait for element existence (protects against race when element not yet mounted)
+  // restart scanner with new qrbox size (used during resize)
+  async function restartScannerWithNewBox(newSize) {
+    try {
+      if (!html5Ref.current) return;
+      // stop then start with new config
+      await stopScanner();
+      // small delay to ensure camera is released
+      setTimeout(() => {
+        startScanner(newSize).catch((e) => {
+          if (verbose) console.warn("restartScannerWithNewBox error", e);
+        });
+      }, 180);
+    } catch (e) {
+      if (verbose) console.warn("restart failed", e);
+    }
+  }
+
+  // Wait for container element
   const waitForElement = (id, timeout = 2500) =>
     new Promise((resolve, reject) => {
       const start = Date.now();
@@ -69,13 +142,12 @@ export default function QRScanner({
           clearInterval(iv);
           reject(new Error("element not found"));
         }
-      }, 50);
+      }, 60);
     });
 
-  async function startScanner() {
+  async function startScanner(manualSize) {
     if (running) return;
     setMessage("");
-    // ensure the div exists
     try {
       await waitForElement(elementId, 2500);
     } catch (err) {
@@ -84,32 +156,42 @@ export default function QRScanner({
       return;
     }
 
-    // create Html5Qrcode instance
+    // ensure previous instance cleared
+    try {
+      if (html5Ref.current) {
+        await html5Ref.current.stop();
+        await html5Ref.current.clear();
+      }
+    } catch (e) {
+      // ignore
+    } finally {
+      html5Ref.current = null;
+    }
+
+    // create new instance
     html5Ref.current = new Html5Qrcode(elementId, { verbose: false });
 
-    // ensure camera list
-    await listCameras().catch(() => { /* ignore */ });
+    // ensure camera list (best effort)
+    await listCameras().catch(() => {});
 
     const chosen = cameraId || (cameras && cameras.length ? cameras[0].id : null);
-
-    // Prepare camera constraints
     const constraints = chosen ? { deviceId: { exact: chosen } } : { facingMode: { ideal: "environment" } };
+
+    // pick the size (manual override -> state)
+    const box = typeof manualSize === "number" ? manualSize : qrSize;
 
     try {
       await html5Ref.current.start(
         constraints,
-        { fps: 10, qrbox: { width: qrboxSize, height: qrboxSize } },
-        (decodedText /*, decodedResult*/) => {
+        { fps: 10, qrbox: { width: box, height: box } },
+        (decodedText /*, result*/) => {
           if (verbose) console.log("QRScanner decoded", decodedText);
-          // send to parent
           onDecode && onDecode(decodedText, { autoSubmit: autoSubmitOnDecode });
           if (autoStopOnDecode) {
-            // small timeout to ensure parent sees value before stopping
             setTimeout(() => stopScanner(), 100);
           }
         },
         (err) => {
-          // decode error per frame (ignore or report)
           if (verbose) console.debug("QRScanner decode error", err);
         }
       );
@@ -119,8 +201,12 @@ export default function QRScanner({
       console.error("QRScanner start error", err);
       setMessage("Unable to start camera. Check permissions.");
       if (onError) onError("Unable to start camera: " + String(err));
-      try { await html5Ref.current?.stop(); } catch (_) {}
-      try { html5Ref.current?.clear(); } catch (_) {}
+      try {
+        await html5Ref.current?.stop();
+      } catch (_) {}
+      try {
+        html5Ref.current?.clear();
+      } catch (_) {}
       html5Ref.current = null;
       setRunning(false);
     }
@@ -143,14 +229,36 @@ export default function QRScanner({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div id={elementId} style={{ width: "100%", maxWidth: 420, height: 280, borderRadius: 8, overflow: "hidden", background: "#000" }} />
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+      {/* container that will be sized (use containerRef for measuring) */}
+      <div
+        ref={containerRef}
+        id={`${elementId}-container`}
+        style={{
+          width: "100%",
+          maxWidth: 640,
+          height: qrSize,
+          borderRadius: 8,
+          overflow: "hidden",
+          background: "#000",
+        }}
+      >
+        {/* Html5Qrcode will render into this element id */}
+        <div id={elementId} style={{ width: "100%", height: "100%" }} />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <button
           onClick={() => {
             if (!running) startScanner();
             else stopScanner();
           }}
-          style={{ padding: "8px 12px", borderRadius: 6, background: running ? "#ef4444" : "#0369a1", color: "#fff", border: "none" }}
+          style={{
+            padding: "8px 12px",
+            borderRadius: 6,
+            background: running ? "#ef4444" : "#0369a1",
+            color: "#fff",
+            border: "none",
+          }}
         >
           {running ? "Stop scanner" : "Start scanner"}
         </button>
@@ -179,10 +287,10 @@ export default function QRScanner({
             ))}
           </select>
         )}
-      </div>
 
-      <div style={{ fontSize: 13, color: "#6b7280" }}>
-        {message || "Tip: start scanner and point camera at QR. Use Refresh cameras if camera list is empty."}
+        <div style={{ fontSize: 13, color: "#6b7280", marginLeft: "auto" }}>
+          {message || "Tip: start scanner and point camera at QR."}
+        </div>
       </div>
     </div>
   );
