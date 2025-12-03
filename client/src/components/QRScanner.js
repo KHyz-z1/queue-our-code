@@ -32,7 +32,7 @@ export default function QRScanner({
 
   const containerRef = useRef(null);
   const resizeObserver = useRef(null);
-  const [qrSize, setQrSize] = useState(280); // px (square)
+  const [qrSize, setQrSize] = useState(280); 
 
   // compute a good qr box size based on container width and viewport height
   function computeSize(containerWidth = 320) {
@@ -92,10 +92,9 @@ export default function QRScanner({
       try {
         resizeObserver.current?.disconnect();
       } catch (e) {}
-      stopScanner(); // cleanup scanner
+      stopScanner(); 
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // run once
+  }, []); 
 
   // Helper: list cameras
   async function listCameras() {
@@ -116,7 +115,6 @@ export default function QRScanner({
   async function restartScannerWithNewBox(newSize) {
     try {
       if (!html5Ref.current) return;
-      // stop then start with new config
       await stopScanner();
       // small delay to ensure camera is released
       setTimeout(() => {
@@ -163,7 +161,6 @@ export default function QRScanner({
         await html5Ref.current.clear();
       }
     } catch (e) {
-      // ignore
     } finally {
       html5Ref.current = null;
     }
