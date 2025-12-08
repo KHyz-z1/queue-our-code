@@ -4,9 +4,7 @@ import axios from "axios";
 import { useParams } from "react-router-dom";
 import QRScanner from "../../components/QRScanner";
 import printStub from "../../utils/printStub";
-
-
-
+import Card from "../../ui/Card";
 
 const API = `${(process.env.REACT_APP_API_URL || "http://localhost:5000/api").replace(/\/$/, "")}/staff`;
 
@@ -14,15 +12,14 @@ export default function QueueManage() {
   const { rideId } = useParams();
   const [ride, setRide] = useState(null);
   const [waiting, setWaiting] = useState([]);
+  
+  // Form State
   const [uid, setUid] = useState("");
   const [name, setName] = useState("");
   const [msg, setMsg] = useState("");
+  
   const token = localStorage.getItem("token");
-
-  const [lastAddedEntry, setLastAddedEntry] = useState(null); // store returned entry just after join
-
-
-
+  const [lastAddedEntry, setLastAddedEntry] = useState(null);
   const [activeBatch, setActiveBatch] = useState(null);
   const [activeEntries, setActiveEntries] = useState([]);
 
@@ -31,370 +28,367 @@ export default function QueueManage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rideId]);
 
-  function computeEstimate(durationMin, position, capacity=1) {
-  // naive estimate: each batch runs durationMin, capacity guests per batch
-  const roundsBefore = Math.floor((position - 1) / capacity);
-  const minutes = durationMin * roundsBefore;
-  const target = new Date(Date.now() + minutes * 60 * 1000);
-  return target.toLocaleTimeString();
-}
+  function computeEstimate(durationMin, position, capacity = 1) {
+    const roundsBefore = Math.floor((position - 1) / capacity);
+    const minutes = durationMin * roundsBefore;
+    const target = new Date(Date.now() + minutes * 60 * 1000);
+    return target.toLocaleTimeString();
+  }
 
-
-  // Single loadQueue that fetches waiting list + active batch
   async function loadQueue() {
     try {
-      // waiting list + ride meta
       const res = await axios.get(`${API}/ride/${rideId}/queue`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      console.log("ride queue response", res.data);
       setRide(res.data.ride || null);
       setWaiting(res.data.waiting || []);
 
-      // active batch (may be null)
       try {
         const b = await axios.get(`${API}/ride/${rideId}/active-batch`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        console.log("active-batch response", b.data);
         setActiveBatch(b.data.batch || null);
         setActiveEntries(b.data.entries || []);
       } catch (err) {
-        console.error("fetch active-batch err", err?.response?.data || err.message);
         setActiveBatch(null);
         setActiveEntries([]);
       }
     } catch (err) {
       console.error("loadQueue err", err);
       setMsg("Could not load queue");
-      setRide(null);
-      setWaiting([]);
-      setActiveBatch(null);
-      setActiveEntries([]);
     }
   }
 
-  // add by uid or name
   async function handleAdd(e) {
-  e.preventDefault();
-  try {
-    // call your join endpoint (staff join)
-    const res = await axios.post(`${API}/queue/join`, { rideId, uid: uid || undefined, name: name || undefined }, { headers: { Authorization: `Bearer ${token}` }});
-    setMsg(res.data.msg || 'Added');
-    setUid(''); setName('');
-    // save the returned entry so staff may print stub manually
-    const entry = res.data.entry || null;
-    setLastAddedEntry(entry);
-    // refresh lists
-    await loadQueue();
-  } catch (err) {
-    console.error('add err', err);
-    setMsg(err.response?.data?.msg || 'Error adding guest');
-  }
-}
+    if (e) e.preventDefault();
 
-  // remove entry from queue
- async function handleRemove(entryId) {
-   if (!window.confirm('Remove this guest from queue?')) return;
-   try {
-     // NOTE: use the queue API base and the staff-cancel endpoint
-     const res = await axios.post(
-       `http://localhost:5000/api/queue/cancel-by-staff`,
-       { entryId },
-       { headers: { Authorization: `Bearer ${token}` } }
-     );
-     setMsg(res.data.msg || 'Removed');
-     await loadQueue();
-   } catch (err) {
-     console.error('remove err', err);
-     setMsg(err.response?.data?.msg || 'Error removing');
-   }
- }
+    // CHECK: Ensure at least one field is filled
+    if (!uid && !name) {
+        setMsg("Please scan a QR or enter a Name");
+        return;
+    }
 
-  async function handleStartBatch() {
-    if (!window.confirm("Start next batch? This will move up to ride capacity guests to active."))
-      return;
     try {
       const res = await axios.post(
-        `${API}/queue/start-batch`,
-        { rideId },
+        `${API}/queue/join`, 
+        { 
+            rideId, 
+            uid: uid || undefined, 
+            name: name || undefined 
+        }, 
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      setMsg(res.data.msg || 'Added');
+      setUid(''); setName('');
+      const entry = res.data.entry || null;
+      setLastAddedEntry(entry);
+      await loadQueue();
+    } catch (err) {
+      console.error('add err', err);
+      setMsg(err.response?.data?.msg || 'Error adding guest');
+    }
+  }
+
+  const handleScan = (decoded) => {
+    setMsg("Scanned! Ready to add.");
+    try {
+      const parsed = JSON.parse(decoded);
+      const scannedUid = parsed.uid || parsed.id || parsed._id || decoded;
+      setUid(scannedUid);
+      // Optional: Auto-submit if you want instant add on scan
+      // handleAdd(null); 
+    } catch (e) {
+      if (decoded.includes(":")) {
+        setUid(decoded.split(":")[0].trim());
+      } else {
+        setUid(decoded);
+      }
+    }
+  };
+
+  async function handleRemove(entryId) {
+    if (!window.confirm('Remove this guest from queue?')) return;
+    try {
+      // Use dynamic API variable
+      const res = await axios.post(
+        `${API}/queue/remove`, 
+        { entryId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setMsg(res.data.msg || 'Removed');
+      await loadQueue();
+    } catch (err) {
+      setMsg(err.response?.data?.msg || 'Error removing');
+    }
+  }
+
+  async function handleStartBatch() {
+    if (!window.confirm("Start next batch? This will move up to ride capacity guests to active.")) return;
+    try {
+      const res = await axios.post(`${API}/queue/start-batch`, { rideId }, { headers: { Authorization: `Bearer ${token}` } });
       setMsg(res.data.msg || `Batch started (${res.data.movedCount})`);
       await loadQueue();
     } catch (err) {
-      console.error("startBatch err", err);
       setMsg(err.response?.data?.msg || "Error starting batch");
     }
   }
 
-  // End the currently active batch
   async function handleEndBatch() {
-    if (!activeBatch) {
-      setMsg("No active batch to end");
-      return;
-    }
-
-    if (!window.confirm("End current batch now? Guests in the batch will be marked completed."))
-      return;
-
+    if (!activeBatch) return setMsg("No active batch to end");
+    if (!window.confirm("End current batch now?")) return;
     try {
       const batchId = activeBatch._id || activeBatch.id;
-      const res = await axios.post(
-        `${API}/queue/end-batch`,
-        { batchId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.post(`${API}/queue/end-batch`, { batchId }, { headers: { Authorization: `Bearer ${token}` } });
       setMsg(res.data.msg || "Batch ended");
-      // refresh data
       await loadQueue();
     } catch (err) {
-      console.error("endBatch err", err);
       setMsg(err.response?.data?.msg || "Error ending batch");
     }
   }
 
-  // Push a waiting entry to the end of the line
   async function handlePushback(entryId) {
-    if (!entryId) {
-      setMsg("Invalid entry id");
-      return;
-    }
+    if (!entryId) return;
     if (!window.confirm("Push this guest to the end of the line?")) return;
-
     try {
-      const res = await axios.post(
-        `${API}/queue/pushback`,
-        { entryId },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      const res = await axios.post(`${API}/queue/pushback`, { entryId }, { headers: { Authorization: `Bearer ${token}` } });
       setMsg(res.data.msg || "Moved to end of line");
       await loadQueue();
     } catch (err) {
-      console.error("pushback err", err);
-      setMsg(err.response?.data?.msg || "Error pushing back entry");
+      setMsg(err.response?.data?.msg || "Error pushing back");
     }
   }
-
 
   async function handlePrintStub(entry) {
-  try {
-    const guest = normalizeGuestFromEntry(entry);
-    const rideName = entry?.ride?.name || ride?.name || (entry?.ride || {}).name || "Ride";
-    const position = entry?.position ?? entry?.pos ?? entry?.positionNumber ?? "—";
+    try {
+      const guest = normalizeGuestFromEntry(entry);
+      const rideName = entry?.ride?.name || ride?.name || "Ride";
+      const position = entry?.position ?? "—";
+      const est = computeEstimate(ride?.duration || 0, Number(position), ride?.capacity || 1);
 
-    // compute estimate using computeEstimate helper (ensure function exists in file)
-    const est = computeEstimate(ride?.duration || 0, Number(position), ride?.capacity || 1);
-
-    const stubPayload = {
-      type: "queue",
-      guestName: guest.name || `Guest (${guest.id})`,
-      guestId: guest.id,
-      rideName,
-      position,
-      estimatedReturn: est,
-      qr: guest.id // use id for QR payload
-    };
-
-    printStub(stubPayload);
-  } catch (e) {
-    console.error("print stub failed", e);
-    setMsg("Could not open print window. Allow pop-ups.");
+      printStub({
+        type: "queue",
+        guestName: guest.name || `Guest (${guest.id})`,
+        guestId: guest.id,
+        rideName,
+        position,
+        estimatedReturn: est,
+        qr: guest.id 
+      });
+    } catch (e) {
+      setMsg("Could not open print window.");
+    }
   }
-}
 
-
-function normalizeGuestFromEntry(entry) {
-  const maybe = entry?.guest || entry?.user || entry?.guestId || entry?.userId || null;
-  if (!maybe) return { id: entry?.guest || entry?.guestId || entry?.id || "unknown", name: entry?.guest?.name || entry?.user?.name || null };
-
-  if (typeof maybe === "string") return { id: maybe, name: null };
-
-  return {
-    id: maybe._id || maybe.id || maybe.uid || maybe.uuid || String(maybe),
-    name: maybe.name || maybe.fullName || maybe.displayName || null
-  };
-}
-
-
-
-
+  function normalizeGuestFromEntry(entry) {
+    const maybe = entry?.guest || entry?.user || entry?.guestId || entry?.userId || null;
+    if (!maybe) return { id: "unknown", name: null };
+    if (typeof maybe === "string") return { id: maybe, name: null };
+    return {
+      id: maybe._id || maybe.id || maybe.uid || String(maybe),
+      name: maybe.name || maybe.fullName || null
+    };
+  }
 
   return (
-    <div style={{ maxWidth: 980 }}>
-      <h2>Queue Manager</h2>
-      {ride && (
-        <div style={{ marginBottom: 8, color: "#6b7280" }}>
-          {ride.name} • Capacity: {ride.capacity} • Duration: {ride.duration} min
-        </div>
-      )}
+    <div className="min-h-screen p-2 sm:p-4 bg-slate-50">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <header className="mb-6">
+          <h2 className="text-2xl font-semibold text-slate-900">Queue Manager</h2>
+          {ride && (
+            <div className="text-sm text-slate-500 mt-1">
+              <span className="font-medium text-slate-700">{ride.name}</span> • Capacity: {ride.capacity} • Duration: {ride.duration} min
+            </div>
+          )}
+        </header>
 
-      {msg && <div style={{ marginBottom: 8 }}>{msg}</div>}
+        {msg && (
+          <div className="mb-4 p-3 bg-blue-50 text-blue-800 rounded-lg border border-blue-100 text-sm">
+            {msg}
+          </div>
+        )}
 
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* --- LEFT COLUMN: SCANNER & ACTIONS --- */}
+          <div className="lg:col-span-1 space-y-6">
+            
+            {/* Scanner Card */}
+            <Card className="p-4 bg-white shadow-sm border border-slate-200">
+              <h4 className="text-sm font-semibold text-slate-700 mb-3 uppercase tracking-wider">Add Guest</h4>
+              
+              <div className="mb-4">
+                <QRScanner
+                  elementId="qr-reader-queue"
+                  onDecode={handleScan}
+                  onError={(e) => console.warn(e)}
+                  autoStopOnDecode={true}
+                  autoSubmitOnDecode={false} 
+                />
+              </div>
 
-      <div style={{ marginBottom: 10 }}>
-  <h4>Scan guest QR to add to queue</h4>
-<QRScanner
-  elementId="qr-reader-queue"
-  onDecode={(decoded) => {
-    // parse decoded similar to your VerifyGuest.handleScanText
-    try {
-      const parsed = JSON.parse(decoded);
-      const u = parsed.uid || parsed.id || parsed._id || null;
-      if (u) setUid(u);
-      else {
-        if (decoded.includes(":")) setUid(decoded.split(":")[0].trim());
-        else setUid(decoded);
-      }
-      setMsg("Scanned UID populated. Click Add to join.");
-    } catch (e) {
-      // fallback plain text
-      setUid(decoded);
-      setMsg("Scanned UID populated. Click Add to join.");
-    }
-  }}
-  autoStopOnDecode={true}
-  autoSubmitOnDecode={true}
-/>
-</div>
-
-
-      <div style={{ display: "flex", gap: 12, marginBottom: 12 }}>
-        <form onSubmit={handleAdd} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            placeholder="guest uid (scan or paste)"
-            value={uid}
-            onChange={(e) => setUid(e.target.value)}
-            style={{ padding: 8, borderRadius: 6 }}
-          />
-          <input
-            placeholder="or guest name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            style={{ padding: 8, borderRadius: 6 }}
-          />
-          <button style={{ padding: "8px 10px", background: "#059669", color: "#fff", borderRadius: 6 }}>
-            Add
-          </button>
-        </form>
-        
-                  {lastAddedEntry && (
-                <div
-                  style={{
-                    marginTop: 10,
-                    padding: 10,
-                    borderRadius: 8,
-                    background: "#f8fafc",
-                    border: "1px solid #e6edf3",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12
-                  }}
+              <form onSubmit={handleAdd} className="flex flex-col gap-3">
+                <div>
+                   <label className="block text-xs font-medium text-slate-500 mb-1">Guest UID</label>
+                   <input
+                     placeholder="Scan or paste UID..."
+                     value={uid}
+                     onChange={(e) => setUid(e.target.value)}
+                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200 text-sm font-mono"
+                   />
+                </div>
+                <div>
+                   <label className="block text-xs font-medium text-slate-500 mb-1">Name (Optional if UID present)</label>
+                   <input
+                     placeholder="Guest Name"
+                     value={name}
+                     onChange={(e) => setName(e.target.value)}
+                     className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-200 text-sm"
+                   />
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium transition-colors"
                 >
-                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#059669" }} />
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{lastAddedEntry.guest?.name || lastAddedEntry.guest || `Guest (${lastAddedEntry.guest?.id || lastAddedEntry.guest})`}</div>
-                      <div style={{ fontSize: 12, color: "#6b7280" }}>Position: {lastAddedEntry.position}</div>
+                  Add to Queue
+                </button>
+              </form>
+            </Card>
+
+            {/* Last Added Notification */}
+            {lastAddedEntry && (
+              <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-100 shadow-sm animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-start gap-3">
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 mt-2 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-slate-800 truncate">
+                      {lastAddedEntry.guest?.name || lastAddedEntry.guest || `Guest`}
                     </div>
+                    <div className="text-xs text-slate-500">Position: {lastAddedEntry.position}</div>
                   </div>
+                </div>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={() => handlePrintStub(lastAddedEntry)}
+                    className="flex-1 py-1.5 px-3 bg-white border border-emerald-200 text-emerald-700 text-xs font-semibold rounded hover:bg-emerald-50"
+                  >
+                    Print Stub
+                  </button>
+                  <button
+                    onClick={() => setLastAddedEntry(null)}
+                    className="py-1.5 px-3 text-slate-400 hover:text-slate-600 text-xs"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            {/* Start Batch Button */}
+            <button
+              onClick={handleStartBatch}
+              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-sm shadow-blue-200 transition-all active:scale-[0.98]"
+            >
+              Start Next Batch
+            </button>
+          </div>
 
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button
-                      onClick={() => handlePrintStub(lastAddedEntry)}
-                      style={{ padding: "6px 10px", borderRadius: 6, background: "#0ea5e9", color: "#fff", border: "none" }}
-                    >
-                      Print Stub
-                    </button>
+          {/* --- RIGHT COLUMN: ACTIVE & WAITING --- */}
+          <div className="lg:col-span-2 space-y-6">
+            
+            {/* Active Batch Section */}
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-slate-800">Current Batch</h3>
+                {activeBatch && (
+                  <button 
+                    onClick={handleEndBatch} 
+                    className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg hover:bg-red-200 transition-colors"
+                  >
+                    End Batch
+                  </button>
+                )}
+              </div>
 
-                    <button
-                      onClick={() => setLastAddedEntry(null)}
-                      style={{ padding: "6px 10px", borderRadius: 6, background: "#efefef", border: "1px solid #ddd" }}
-                    >
-                      Dismiss
-                    </button>
-                  </div>
+              {activeBatch ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {Array.from({ length: activeBatch.capacity || ride?.capacity || 0 }).map((_, i) => {
+                    const entry = activeEntries[i];
+                    return (
+                      <div
+                        key={i}
+                        className={`
+                          aspect-[4/3] rounded-lg border flex flex-col items-center justify-center p-2 text-center transition-all
+                          ${entry ? "bg-white border-slate-200 shadow-sm" : "bg-slate-100 border-dashed border-slate-300"}
+                        `}
+                      >
+                        {entry ? (
+                          <>
+                            <div className="font-bold text-slate-900 text-sm truncate w-full px-1">{entry.user?.name || entry.user}</div>
+                            <div className="text-xs text-slate-500 mt-1 bg-slate-100 px-1.5 py-0.5 rounded">Pos {entry.position}</div>
+                          </>
+                        ) : (
+                          <div className="text-xs text-slate-400 font-medium">Empty</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-slate-100 rounded-xl border border-dashed border-slate-300 text-slate-500">
+                  No active batch running
                 </div>
               )}
+            </section>
 
+            {/* Waiting List Section */}
+            <section>
+              <h3 className="text-lg font-semibold text-slate-800 mb-3">
+                Waiting List <span className="text-slate-400 font-normal ml-1">({waiting.length})</span>
+              </h3>
+              
+              <div className="space-y-3">
+                {waiting.length === 0 ? (
+                    <div className="text-sm text-slate-500 italic">Queue is empty.</div>
+                ) : (
+                    waiting.map((e) => (
+                      <div
+                        key={e.id}
+                        className="bg-white p-3 sm:p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div>
+                          <div className="font-bold text-slate-900">{e.user?.name || e.user?.id || "Unknown"}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            Pos <span className="font-mono font-medium text-slate-700">{e.position}</span> • {new Date(e.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })}
+                          </div>
+                        </div>
 
-        <button
-          onClick={handleStartBatch}
-          style={{ padding: "8px 10px", background: "#0369a1", color: "#fff", borderRadius: 6 }}
-        >
-          Start Next Batch
-        </button>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <h3>Current Batch</h3>
-        {activeBatch ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {Array.from({ length: activeBatch.capacity || ride?.capacity || 0 }).map((_, i) => {
-              const entry = activeEntries[i];
-              return (
-                <div
-                  key={i}
-                  style={{
-                    width: 120,
-                    height: 90,
-                    borderRadius: 8,
-                    background: entry ? "#fff" : "#f3f4f6",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexDirection: "column",
-                    border: "1px solid #e6edf3",
-                  }}
-                >
-                  {entry ? (
-                    <>
-                      <div style={{ fontWeight: 700 }}>{entry.user?.name || entry.user}</div>
-                      <div style={{ fontSize: 12, color: "#6b7280" }}>{entry.position}</div>
-                    </>
-                  ) : (
-                    <div style={{ color: "#9ca3af" }}>Empty</div>
-                  )}
-                </div>
-              );
-            })}
-            <div style={{ marginLeft: 12 }}>
-              <button onClick={handleEndBatch} style={{ padding: "8px 10px", background: "#ef4444", color: "#fff", borderRadius: 6 }}>
-                End Batch
-              </button>
-            </div>
+                        <div className="flex items-center gap-2 self-end sm:self-auto">
+                           <button 
+                            onClick={() => handlePrintStub(e)} 
+                            className="px-3 py-1.5 rounded-lg bg-sky-100 text-sky-700 text-xs font-semibold hover:bg-sky-200"
+                          >
+                            Print
+                          </button>
+                          <button 
+                            onClick={() => handlePushback(e.id)} 
+                            className="px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 text-xs font-semibold hover:bg-amber-200"
+                          >
+                            Push Back
+                          </button>
+                          <button 
+                            onClick={() => handleRemove(e.id)} 
+                            className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-xs font-semibold hover:bg-red-100"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                )}
+              </div>
+            </section>
           </div>
-        ) : (
-          <div>No active batch</div>
-        )}
-      </div>
-
-      <div>
-        <h3>Waiting List ({waiting.length})</h3>
-        <div style={{ display: "grid", gap: 8 }}>
-          {waiting.map((e) => (
-            <div
-              key={e.id}
-              style={{ padding: 10, borderRadius: 6, background: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center" }}
-            >
-              <div>
-                <div style={{ fontWeight: 700 }}>{e.user?.name || e.user?.id || "Unknown"}</div>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  Pos {e.position} • Joined: {new Date(e.joinedAt).toLocaleString()}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => handleRemove(e.id)} style={{ background: "#ef4444", color: "#fff", padding: "6px 10px", borderRadius: 6 }}>
-                  Remove
-                </button>
-                <button onClick={() => handlePushback(e.id)} style={{ background: "#f59e0b", color: "#fff", padding: "6px 10px", borderRadius: 6 }}>
-                  Push back
-                </button>
-                <button onClick={() => handlePrintStub(e)} style={{ background:'#0ea5e9', color:'#fff', padding:'6px 10px', borderRadius:6 }}>Print</button>
-              </div>
-            </div>
-          ))}
         </div>
       </div>
     </div>

@@ -1,79 +1,109 @@
-// client/src/pages/staff/StaffHome.js 
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import api from '../../utils/api'; 
+// client/src/pages/staff/StaffHome.js
+import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import api from "../../utils/api";
+import Card from "../../ui/Card";
+import Button from "../../ui/Button";
+import Badge from "../../ui/Badge";
 
-const statusColors = { open: '#059669', closed: '#6b7280', maintenance: '#ef4444' };
-const categoryColors = {
-  'Attractions': '#6b7280',
-  'Kiddie Rides': '#a3e635',
-  'Family Rides': '#60a5fa',
-  'Teen/Adult Rides': '#fb923c',
-  'Extreme Rides': '#ef4444'
+const CATEGORY_BADGES = {
+  Attractions: "bg-emerald-500",
+  "Kiddie Rides": "bg-blue-400",
+  "Family Rides": "bg-yellow-500",
+  "Teen/Adult Rides": "bg-violet-600",
+  "Extreme Rides": "bg-red-500",
+};
+
+const STATUS_CLASS = {
+  open: "bg-emerald-500 text-white",
+  closed: "bg-slate-300 text-slate-800",
+  maintenance: "bg-red-400 text-white",
 };
 
 export default function StaffHome() {
   const [rides, setRides] = useState([]);
-  const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // search & filter & pin handling
-  const [search, setSearch] = useState('');
-  const [filterCat, setFilterCat] = useState('All');
-  const token = localStorage.getItem('token');
-  const navigate = useNavigate();
+  const [msg, setMsg] = useState("");
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState("All");
 
   useEffect(() => {
     loadRides();
+    // eslint-disable-next-line
   }, []);
 
   async function loadRides() {
     setLoading(true);
+    setMsg("");
     try {
-      const res = await api.get('/staff/rides'); // make sure api wrapper sets Authorization
+      const res = await api.get("/staff/rides");
       setRides(res.data.rides || []);
     } catch (err) {
-      console.error('load rides err', err);
-      setMsg('Could not load rides');
+      console.error("load rides err", err);
+      setMsg("Could not load rides");
+      setRides([]);
     } finally {
       setLoading(false);
     }
   }
 
   async function togglePin(rideId, targetPinned) {
-  try {
-    const res = await api.post(`/admin/rides/${rideId}/pin`, { pinned: targetPinned });
-    setMsg(res.data.msg || (targetPinned ? 'Pinned' : 'Unpinned'));
-    await loadRides();
-  } catch (err) {
-    console.error('pin err', err);
-    setMsg(err.response?.data?.msg || 'Pin failed');
+    try {
+      const res = await api.post(`/admin/rides/${rideId}/pin`, { pinned: targetPinned });
+      setMsg(res.data.msg || (targetPinned ? "Pinned" : "Unpinned"));
+      await loadRides();
+    } catch (err) {
+      console.error("pin err", err);
+      setMsg(err.response?.data?.msg || "Pin failed");
+    }
   }
-}
 
+  const filtered = useMemo(() => {
+    const lower = search.trim().toLowerCase();
+    return (rides || [])
+      .filter((r) => {
+        const matchesSearch = !lower || (r.name || "").toLowerCase().includes(lower);
+        const matchesCat = filterCat === "All" || (r.category || "") === filterCat;
+        return matchesSearch && matchesCat;
+      })
+      .sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return (b.queueCount || 0) - (a.queueCount || 0);
+      });
+  }, [rides, search, filterCat]);
 
-
-  // client-side filtering
-  const filtered = rides.filter(r => {
-    const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase());
-    const matchesCat = filterCat === 'All' || (r.category || '').toLowerCase() === filterCat.toLowerCase();
-    return matchesSearch && matchesCat;
-  });
-
-  filtered.sort((a,b) => {
-    if (a.pinned && !b.pinned) return -1;
-    if (!a.pinned && b.pinned) return 1;
-    return b.queueCount - a.queueCount;
-  });
+  function getImgSrc(r) {
+    if (!r) return null;
+    if (!r.image) return null;
+    if (r.image.startsWith("http")) return r.image;
+    const base = (process.env.REACT_APP_API_BASE || "http://localhost:5000").replace(/\/$/, "");
+    return `${base}${r.image}`;
+  }
 
   return (
-    <div style={{ padding: 18 }}>
-      <div style={{ display: 'flex', justifyContent:'space-between', alignItems:'center', marginBottom: 12 }}>
-        <h2>Staff — Rides</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input placeholder="Search ride" value={search} onChange={e=>setSearch(e.target.value)}
-            style={{ padding: 8, borderRadius: 6, border: '1px solid #e5e7eb' }} />
-            <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ padding: 8, borderRadius: 6 }}>
+    <div className="min-h-screen p-2 sm:p-4 bg-slate-50">
+      <div className="max-w-6xl mx-auto">
+        <header className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold text-slate-900">Staff — Rides</h1>
+            <p className="text-sm text-slate-500 mt-1">Manage rides, queues and quick staff actions.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto mt-2 md:mt-0">
+            <input
+              type="search"
+              placeholder="Search ride..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 min-w-[140px] px-3 py-2 rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
+            />
+
+            <select
+              value={filterCat}
+              onChange={(e) => setFilterCat(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-slate-200 bg-white flex-shrink-0"
+            >
               <option>All</option>
               <option>Attractions</option>
               <option>Kiddie Rides</option>
@@ -81,80 +111,116 @@ export default function StaffHome() {
               <option>Teen/Adult Rides</option>
               <option>Extreme Rides</option>
             </select>
-        </div>
-      </div>
 
-      {msg && <div style={{ marginBottom: 12 }}>{msg}</div>}
+            <button
+              onClick={() => {
+                setSearch("");
+                setFilterCat("All");
+              }}
+              className="px-3 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-sm flex-shrink-0"
+            >
+              Reset
+            </button>
+          </div>
+        </header>
 
-      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-        {filtered.map(r => {
-          const id = String(r.id ?? r._id ?? (r._id && r._id.$oid) ?? '');
-          const img = r.image ? (r.image.startsWith('http') ? r.image : `${process.env.REACT_APP_API_BASE || 'http://localhost:5000'}${r.image}`) : null;
-          return (
-            <div key={id} style={{
-              display: 'flex', flexDirection: 'column', borderRadius: 12, background: '#fff',
-              boxShadow: '0 4px 6px rgba(0,0,0,0.06)', overflow: 'hidden', border: '1px solid #e5e7eb'
-            }}>
-              {/* image */}
-              <div style={{ height: 160, overflow: 'hidden', backgroundColor: '#f3f4f6' }}>
-                {img ? <img src={img} alt={r.name} style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                     : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:'#9ca3af'}}>No image</div>}
-              </div>
+        {msg && (
+          <div className="mb-4 text-sm text-red-600">
+            {msg}
+          </div>
+        )}
 
-              <div style={{ padding: 16, flexGrow: 1 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight:700, fontSize: 18 }}>{r.name}</div>
-                    <div style={{ color:'#6b7280', fontSize:13, marginTop:4 }}>
-                      ID: {id} • Cap: {r.capacity} • {r.duration} min
+        <section>
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+            {loading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <Card key={i} className="animate-pulse p-4">
+                  <div className="h-36 bg-slate-100 rounded-md" />
+                  <div className="mt-3 h-3 bg-slate-100 rounded w-1/2" />
+                </Card>
+              ))
+            ) : filtered.length === 0 ? (
+              <div className="col-span-full text-sm text-slate-500 p-4">No rides found.</div>
+            ) : (
+              filtered.map((r) => {
+                const id = String(r.id ?? r._id ?? "");
+                const img = getImgSrc(r);
+                return (
+                  <Card key={id} className="p-0 overflow-hidden flex flex-col h-full">
+                    {/* Image */}
+                    <div className="h-40 bg-slate-100 shrink-0">
+                      {img ? (
+                        <img src={img} alt={r.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400">No image</div>
+                      )}
                     </div>
-                  </div>
 
-                  <div style={{ textAlign:'right' }}>
-                    {/* pinned indicator */}
-                    {r.pinned && <div style={{ fontSize:12, padding:'4px 8px', borderRadius:6, background:'#fde68a', color:'#92400e', fontWeight:700, marginBottom:6 }}>PINNED</div>}
-                    <div style={{ fontSize:12, fontWeight:600, color:'#fff', padding:'4px 8px', borderRadius:6, background: statusColors[r.status] || '#9ca3af', textTransform:'uppercase' }}>
-                      {r.status}
+                    <div className="p-3 sm:p-4 flex flex-col gap-3 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-lg font-semibold text-slate-900 truncate">{r.name}</div>
+                          <div className="text-xs text-slate-500 mt-1">
+                            ID: {id} • Cap: <span className="font-medium">{r.capacity}</span> • {r.duration ?? "-"} min
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-2 shrink-0">
+                          {r.pinned && (
+                            <div className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 font-semibold">PINNED</div>
+                          )}
+                          <div className={`text-xs uppercase px-2 py-1 rounded-full ${STATUS_CLASS[r.status] || "bg-slate-200 text-slate-800"}`}>
+                            {r.status}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          colorClass={CATEGORY_BADGES[r.category] || "bg-gray-400"}
+                          className="text-xs px-2 py-1 shrink-0"
+                        >
+                          {r.category || "Attractions"}
+                        </Badge>
+
+                        <div className="text-sm text-slate-700 line-clamp-2">{r.shortDescription || (r.description ? `${r.description.slice(0, 120)}...` : "No description")}</div>
+                      </div>
+
+                      <div className="mt-auto pt-2 flex flex-wrap items-center justify-between gap-y-3">
+                        <div>
+                          <div className="text-2xl font-extrabold leading-none">{r.queueCount ?? 0}</div>
+                          <div className="text-xs text-slate-500">in queue</div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="secondary"
+                            onClick={() => togglePin(id, !r.pinned)}
+                            className="px-3 py-1 text-sm whitespace-nowrap"
+                          >
+                            {r.pinned ? "Unpin" : "Pin"}
+                          </Button>
+
+                          {r.status !== "open" ? (
+                            <Button variant="secondary" className="px-3 py-1 text-sm whitespace-nowrap opacity-50 cursor-not-allowed">
+                              Closed
+                            </Button>
+                          ) : (
+                            <Link to={`/staff/rides/${id}`} className="inline-block">
+                              <Button variant="primary" className="px-3 py-1 text-sm whitespace-nowrap">
+                                Manage
+                              </Button>
+                            </Link>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* category badge + description */}
-                <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <div style={{
-                    padding: '6px 8px', borderRadius: 999, fontSize: 12, fontWeight:700,
-                    background: categoryColors[r.category] || '#9ca3af', color: '#fff'
-                  }}>
-                    {r.category || 'Attractions'}
-                  </div>
-                  <div style={{ color:'#374151', fontSize:14, flex:1 }}>
-                    {r.shortDescription || (r.description ? r.description.slice(0,120)+'...' : 'No description')}
-                  </div>
-                </div>
-
-                {/* queue count */}
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginTop: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 20, fontWeight:700 }}>{r.queueCount}</div>
-                    <div style={{ fontSize: 12, color:'#6b7280' }}>in queue</div>
-                  </div>
-
-                  <div style={{ display:'flex', gap:8 }}>
-                    <button onClick={() => togglePin(id, !r.pinned)} style={{ padding:'8px 10px', borderRadius:6, border:'none', background: r.pinned ? '#d1d5db' : '#f59e0b', color:'#fff' }}>
-                      {r.pinned ? 'Unpin' : 'Pin'}
-                    </button>
-
-                    { r.status !== 'open' ? (
-                      <button disabled style={{ padding:'8px 10px', borderRadius:6, background:'#d1d5db', color:'#4b5563' }}>CANNOT MANAGE</button>
-                    ) : (
-                      <Link to={`/staff/rides/${id}`} style={{ padding:'8px 10px', borderRadius:6, background:'#0369a1', color:'#fff', textDecoration:'none' }}>Manage</Link>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </section>
       </div>
     </div>
   );
