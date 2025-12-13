@@ -2,6 +2,8 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const auth = require('../middleware/authMiddleware');
+const RegistrationLog = require('../models/RegistrationLog');
+
 
 
 const router = express.Router();
@@ -90,6 +92,14 @@ router.post('/verify', require('../middleware/authMiddleware'), async (req, res)
     user.verificationTokenExpires = null;
     user.expiresAt = null;
     await user.save();
+
+    await RegistrationLog.create({
+  userId: user._id,
+  name: user.name || '',
+  createdAt: user.createdAt || new Date(),
+  meta: { source: 'public-register' }
+});
+
 
     res.json({ msg: 'User verified', user: { id: user._id, verified: user.verified, snowAccess: user.snowAccess } });
   } catch (err) {

@@ -3,12 +3,12 @@ const router = express.Router();
 const QueueEntry = require('../models/QueueEntry');
 const Ride = require('../models/Ride');
 const User = require('../models/User');
-const Report = require('../models/Report'); // Assuming you renamed your Report model to SavedReport, but keeping the original name based on the POST route logic
-const SavedReport = require('../models/Report'); // Use this if you have a separate model for saved reports, otherwise, just use Report
+const Report = require('../models/Report'); 
+const SavedReport = require('../models/Report'); 
 const mongoose = require('mongoose');
 const auth = require('../middleware/authMiddleware'); 
-// Ensure your requireAdmin middleware is defined or imported correctly
-// If you are using an imported requireAdmin, use that. Otherwise, keep the local definition.
+const RegistrationLog = require('../models/RegistrationLog');
+
 const requireAdmin = async (req, res, next) => {
   if (!req.user || req.user.role !== 'admin') return res.status(403).json({ msg: 'Forbidden: admin only' });
   next();
@@ -29,11 +29,17 @@ function presetRange(preset, dateStr) {
   const start = new Date(d);
   start.setHours(0,0,0,0);
 
-  if (preset === 'day') {
-    const end = new Date(start);
-    end.setHours(23,59,59,999);
-    return { start, end, scope: 'day' };
-  }
+if (preset === 'day') {
+  const end = new Date(); // now
+  const start24 = new Date(end);
+  start24.setHours(end.getHours() - 24);
+
+  return {
+    start: start24,
+    end,
+    scope: 'day'
+  };
+}
 
   if (preset === 'week') {
     // assume week starts Monday (adjust if you prefer Sunday)
@@ -88,7 +94,7 @@ router.get('/', auth, requireAdmin, async (req, res) => {
     }
 
     // compute guests registered in range
-    const guestsToday = await User.countDocuments({ createdAt: { $gte: start, $lte: end } });
+    const guestsToday = await RegistrationLog.countDocuments({ createdAt: { $gte: start, $lte: end } });
 
     // Aggregation per ride
     const perRideAgg = await QueueEntry.aggregate([

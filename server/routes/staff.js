@@ -8,6 +8,8 @@ const User = require('../models/User');
 const jwt = require('jsonwebtoken');
 const { generateShortToken } = require('../utils/token'); // adjust path if different
 const Batch = require('../models/Batch');
+const RegistrationLog = require('../models/RegistrationLog');
+
 
 
 const router = express.Router();
@@ -417,12 +419,19 @@ router.post('/create-guest', auth, requireStaff, async (req, res) => {
       verifiedBy: staffId,
       expiresAt: null,
 
-      // ⬅️ NEW FIELD
       snowAccess: !!snowAccess
     };
 
     const user = new User(userData);
     await user.save();
+  
+    await RegistrationLog.create({
+    userId: user._id,
+    name: user.name || '',
+    createdAt: user.createdAt || new Date(),
+    createdBy: staffId,
+    meta: { source: 'staff-create' }
+  });
 
     const qrPayload = {
       uid: user._id.toString(),

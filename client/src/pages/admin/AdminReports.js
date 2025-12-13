@@ -1,6 +1,6 @@
 // client/src/pages/admin/AdminReports.js
 import React, { useEffect, useState } from "react";
-import api from "../../utils/api"; // your axios wrapper; falls back to axios if you don't have one
+import api from "../../utils/api"; 
 
 // small helpers
 function toIsoDayStart(d) {
