@@ -64,14 +64,12 @@ router.put('/profile', auth, requireAdmin, async (req, res) => {
 
     let emailChanged = false;
 
-    // 1. Update name if provided
     if (name) user.name = name;
 
     if (starPassCode && starPassCode !== user.starPassCode) {
       user.starPassCode = starPassCode;
     }
 
-    // 2. Check if email is being changed
     if (email && email !== user.email) {
       user.email = email;
       user.emailVerified = false;
@@ -80,10 +78,8 @@ router.put('/profile', auth, requireAdmin, async (req, res) => {
       emailChanged = true;
     }
 
-    // 3. Persist changes to database
     await user.save();
 
-    // 4. Handle Post-Save Logic (Email Sending)
     if (emailChanged) {
       await sendAdminEmail({
         to: user.email,
@@ -108,7 +104,6 @@ router.put('/profile', auth, requireAdmin, async (req, res) => {
       });
     }
 
-    // If only the name was changed
     res.json({ msg: 'Profile updated successfully.' });
 
   } catch (err) {
