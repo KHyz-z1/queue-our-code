@@ -104,6 +104,20 @@ export default function AdminLayout() {
             Reports
           </NavLink>
 
+           <NavLink
+            to="/admin/profile"
+            style={({ isActive }) => ({
+              color: isActive ? "#0f172a" : "#fff",
+              background: isActive ? "#fff" : "transparent",
+              padding: "8px 10px",
+              borderRadius: 6,
+              textDecoration: "none",
+              fontWeight: 600
+            })}
+          >
+            Profile
+          </NavLink>
+
         </nav>
 
         <div style={{ marginTop: 24, fontSize: 13, color: "#94a3b8" }}>

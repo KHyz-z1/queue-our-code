@@ -69,6 +69,10 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.use('/api/staff', staffRoutes);
 app.use('/api/rides', rideRoutes);
 app.use('/api/admin/reports', require('./routes/adminReports'));
+app.use('/api/admin', require('./routes/adminProfile'));
+app.use("/api/admin/auth", require("./routes/adminAuth"));
+
+
 
 
 // server start 

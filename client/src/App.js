@@ -11,6 +11,8 @@ import AdminLayout from "./pages/AdminLayout";
 import RequireAdmin from "./components/RequireAdmin";
 import AdminGuests from "./pages/AdminGuests";
 import AdminReports from './pages/admin/AdminReports';
+import AdminProfile from './pages/admin/AdminProfile';
+import AdminVerifyEmail from "./pages/admin/AdminVerifyEmail";
 
 
 import RequireStaff from "./components/RequireStaff";
@@ -52,7 +54,7 @@ function App() {
             <Route path="staff" element={<AdminDashboard />} />{/* optional: /admin/staff */}
             <Route path="guests" element={<AdminGuests/>} />    {/* /admin/guests */}
             <Route path="reports" element={<AdminReports />} />
-
+            <Route path="profile" element={<AdminProfile />} /> {/* /admin/profile */}
           </Route>
 
           <Route path="/staff/*" element={<RequireStaff><StaffLayout/></RequireStaff>}>
@@ -68,6 +70,8 @@ function App() {
           <Route path="/guest/rides" element={<RidesList/>} />
           <Route path="/guest/queues" element={<MyQueues/>} />
           <Route path="/guest/ride/:rideId" element={<GuestRideStatus />} />
+          <Route path="/admin/verify-email" element={<AdminVerifyEmail />} />
+
         </Routes>
       </div>
     </BrowserRouter>

@@ -7,6 +7,28 @@ const userSchema = new mongoose.Schema({
   role: { type: String, enum: ['guest','staff','admin'], default: 'guest' },
   subscriptionType: { type: String, default: '' },
 
+  email: {
+  type: String,
+  lowercase: true,
+  trim: true,
+  sparse: true
+},
+
+emailVerified: {
+  type: Boolean,
+  default: false
+},
+
+emailVerificationToken: {
+  type: String,
+  default: null
+},
+
+emailVerificationExpires: {
+  type: Date,
+  default: null
+},
+
   // verification fields (for gate verification flow)
   verified: { type: Boolean, default: false },
   verificationToken: { type: String, default: null },
@@ -20,9 +42,20 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   expiresAt: {
   type: Date,
-  default: () => new Date(Date.now() + 10 * 60 * 1000), // 10 minutes from creation
-  index: { expires: 0 }, // TTL index: delete after this time
+  default: function () {
+    return this.role === 'guest'
+      ? new Date(Date.now() + 10 * 60 * 1000) // guests
+      : null; // admin & staff never expire
+  },
+  index: { expires: 0 }
 },
+
+
+// Admin email verification fields
+
+starpassResetToken: String,
+starpassResetExpires: Date,
+
 
 });
 

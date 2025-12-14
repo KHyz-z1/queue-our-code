@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import api from "../utils/api";
 import Button from "../ui/Button";
 
+
 /**
  * Login / Activate page
  * - Guest: activate / re-issue token (name or UID)
@@ -16,6 +17,26 @@ export default function Login() {
   const [mode, setMode] = useState("guest"); // "guest" | "staff"
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  // Forgot StarPass (admin only)
+const [showForgot, setShowForgot] = useState(false);
+const [email, setEmail] = useState("");
+const [forgotMsg, setForgotMsg] = useState("");
+
+async function sendRecovery() {
+  if (!email) {
+    setForgotMsg("Email is required");
+    return;
+  }
+
+  try {
+    const res = await api.post("/admin/auth/forgot-starpass", { email });
+    setForgotMsg(res.data.msg || "Recovery email sent");
+  } catch (err) {
+    setForgotMsg(err.response?.data?.msg || "Recovery failed");
+  }
+}
+
+
 
   // guest activation
   const [guestNameOrUid, setGuestNameOrUid] = useState("");
@@ -75,6 +96,7 @@ export default function Login() {
       setLoading(false);
     }
   };
+  
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
@@ -135,6 +157,65 @@ export default function Login() {
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-sky-200"
                 placeholder="Enter StarPass code"
               />
+
+              <button
+  type="button"
+  onClick={() => setShowForgot(true)}
+  className="text-xs text-sky-600 hover:underline mt-2"
+>
+  Forgot StarPass?
+</button>
+
+
+{showForgot && (
+  <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="bg-white rounded-xl p-5 w-full max-w-sm shadow-xl">
+      <h3 className="text-lg font-bold text-slate-900 mb-2">
+        Recover StarPass (Admin)
+      </h3>
+
+      <p className="text-xs text-slate-500 mb-3">
+        Enter your verified admin email to receive your StarPass code.
+      </p>
+
+      <input
+        type="email"
+        placeholder="Admin email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        className="w-full border border-slate-300 rounded-lg p-2 mb-3"
+      />
+
+      {forgotMsg && (
+        <div className="text-xs text-center mb-2 text-slate-700">
+          {forgotMsg}
+        </div>
+      )}
+
+      <div className="flex gap-2">
+        <button
+          onClick={() => {
+            setShowForgot(false);
+            setForgotMsg("");
+            setEmail("");
+          }}
+          className="flex-1 py-2 rounded-lg border border-slate-300"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={sendRecovery}
+          className="flex-1 py-2 rounded-lg bg-sky-600 text-white font-semibold"
+        >
+          Send Code
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
 
               <Button type="submit" variant="primary" className="w-full py-3" disabled={loading || !starPassCode.trim()}>
                 {loading ? "Signing in..." : "Sign in (Staff / Admin)"}
